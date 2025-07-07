@@ -9,7 +9,9 @@ import {IVariableDebtToken} from "@aave-v3/interfaces/IVariableDebtToken.sol";
 import {IRewardsController} from "@aave-v3/rewards/interfaces/IRewardsController.sol";
 import {IPriceOracle} from "@aave-v3/interfaces/IPriceOracle.sol";
 
-import {BaseLenderBorrower, ERC20, SafeERC20} from "./BaseLenderBorrower.sol";
+import {IVaultAPROracle} from "./interfaces/IVaultAPROracle.sol";
+
+import {BaseLenderBorrower, IERC4626, ERC20, SafeERC20} from "./BaseLenderBorrower.sol";
 
 contract AaveLenderBorrowerStrategy is BaseLenderBorrower {
 
@@ -19,8 +21,12 @@ contract AaveLenderBorrowerStrategy is BaseLenderBorrower {
     // Constants
     // ===============================================================
 
+    uint256 private constant RAY = 1e27;
     uint256 private constant INTEREST_RATE_MODE = 2; // interestRateMode 2 for Variable, 1 is deprecated on v3.2.0
     uint16 private constant REFERRAL = 0;
+
+    /// @notice The governance address, only one that is able to call `sweep()`
+    address public constant GOV = 0xFEB4acf3df3cDEA7399794D0869ef76A6EfAff52;
 
     IPoolAddressesProvider public immutable ADDRESSES_PROVIDER;
     IPool public immutable POOL;
@@ -29,6 +35,9 @@ contract AaveLenderBorrowerStrategy is BaseLenderBorrower {
     IAToken public immutable A_TOKEN;
     IVariableDebtToken public immutable DEBT_TOKEN;
     IPriceOracle public immutable PRICE_ORACLE;
+
+    /// @notice The lender vault APR oracle contract
+    IVaultAPROracle public constant VAULT_APR_ORACLE = IVaultAPROracle(0x1981AD9F44F2EA9aDd2dC4AD7D075c102C70aF92);
 
     // ===============================================================
     // Constructor
@@ -43,14 +52,14 @@ contract AaveLenderBorrowerStrategy is BaseLenderBorrower {
         string memory _name,
         address _lenderVault,
         address _addressesProvider
-    ) BaseLenderBorrower(_asset, _name, CONTROLLER_FACTORY.stablecoin(), _lenderVault) {
+    ) BaseLenderBorrower(_asset, _name, IERC4626(_lenderVault).asset(), _lenderVault) {
         ADDRESSES_PROVIDER = IPoolAddressesProvider(_addressesProvider);
         POOL = IPool(ADDRESSES_PROVIDER.getPool());
         PROTOCOL_DATA_PROVIDER = IPoolDataProvider(ADDRESSES_PROVIDER.getPoolDataProvider());
         REWARDS_CONTROLLER = IRewardsController(ADDRESSES_PROVIDER.getAddress(keccak256("INCENTIVES_CONTROLLER")));
         PRICE_ORACLE = IPriceOracle(ADDRESSES_PROVIDER.getPriceOracle());
 
-        (address _aToken, , address _debtToken) = PROTOCOL_DATA_PROVIDER.getReserveTokensAddresses(_asset);
+        (address _aToken,, address _debtToken) = PROTOCOL_DATA_PROVIDER.getReserveTokensAddresses(_asset);
         A_TOKEN = IAToken(_aToken);
         DEBT_TOKEN = IVariableDebtToken(_debtToken);
 
@@ -58,7 +67,11 @@ contract AaveLenderBorrowerStrategy is BaseLenderBorrower {
         require(_usageAsCollateralEnabled, "!usageAsCollateralEnabled");
         require(!_isBorrowPaused(), "borrowPaused");
 
-        // //_setEMode(true); // use emode if it's available
+        // (,,,,, bool _usageAsCollateralEnabled,,,,) = PROTOCOL_DATA_PROVIDER.getReserveConfigurationData(borrowToken); // @todo
+        // require(_usageAsCollateralEnabled, "!usageAsCollateralEnabled");
+        // require(!_isBorrowPaused(), "borrowPaused");
+
+        // //_setEMode(true); // use emode if it's available // @todo
         // // Set ltv targets
         // _autoConfigureLTVs();
 
@@ -115,25 +128,25 @@ contract AaveLenderBorrowerStrategy is BaseLenderBorrower {
     }
 
     /// @inheritdoc BaseLenderBorrower
-    function _isSupplyPaused() internal pure override returns (bool) {
+    function _isSupplyPaused() internal view override returns (bool) {
         (,,,,,,,, bool isActive, bool isFrozen) = PROTOCOL_DATA_PROVIDER.getReserveConfigurationData(address(asset));
         return !isActive || isFrozen || PROTOCOL_DATA_PROVIDER.getPaused(address(asset));
     }
 
     /// @inheritdoc BaseLenderBorrower
-    function _isBorrowPaused() internal pure override returns (bool) {
+    function _isBorrowPaused() internal view override returns (bool) {
         (,,,,,, bool _borrowingEnabled,,,) = PROTOCOL_DATA_PROVIDER.getReserveConfigurationData(address(asset));
         return _isSupplyPaused() || !_borrowingEnabled;
     }
 
     /// @inheritdoc BaseLenderBorrower
     function _isLiquidatable() internal view override returns (bool) {
-        (,,, uint256 _currentLiquidationThreshold, uint256 ltv, uint256 _healthFactor) = PROTOCOL_DATA_PROVIDER.getUserAccountData(address(this));
-        return 0; // @todo
+        (,,,,, uint256 _healthFactor) = PROTOCOL_DATA_PROVIDER.getUserAccountData(address(this));
+        return _healthFactor < WAD; // @todo
     }
 
     /// @inheritdoc BaseLenderBorrower
-    function _maxCollateralDeposit() internal pure override returns (uint256) {
+    function _maxCollateralDeposit() internal view override returns (uint256) {
         (, uint256 _supplyCap) = PROTOCOL_DATA_PROVIDER.getReserveCaps(address(asset));
         if (_supplyCap == 0) return type(uint256).max;
 
@@ -153,30 +166,31 @@ contract AaveLenderBorrowerStrategy is BaseLenderBorrower {
     /// @inheritdoc BaseLenderBorrower
     function getNetBorrowApr(
         uint256 /*_newAmount*/
-    ) public view override returns (uint256) { // @todo -- here
-        return forceLeverage ? 0 : AMM.rate() * SECONDS_IN_YEAR; // Since we're not duming, rate will not necessarily change
+    ) public view override returns (uint256) {
+        return POOL.getReserveData(address(asset)).currentVariableBorrowRate / (RAY / WAD);
     }
 
     /// @inheritdoc BaseLenderBorrower
     function getNetRewardApr(
         uint256 _newAmount
     ) public view override returns (uint256) {
-        return VAULT_APR_ORACLE.getExpectedApr(address(lenderVault), int256(_newAmount));
+        return VAULT_APR_ORACLE.getStrategyApr(address(lenderVault), int256(_newAmount));
     }
 
     /// @inheritdoc BaseLenderBorrower
     function getLiquidateCollateralFactor() public view override returns (uint256) {
-        return (WAD - CONTROLLER.loan_discount()) - ((BANDS * WAD) / (2 * A));
+        (, uint256 _ltv,,,,,,,,) = PROTOCOL_DATA_PROVIDER.getReserveConfigurationData(address(asset));
+        return _ltv * (WAD / MAX_BPS);
     }
 
     /// @inheritdoc BaseLenderBorrower
     function balanceOfCollateral() public view override returns (uint256) {
-        return CONTROLLER.user_state(address(this))[0];
+        return A_TOKEN.balanceOf(address(this));
     }
 
     /// @inheritdoc BaseLenderBorrower
     function balanceOfDebt() public view override returns (uint256) {
-        return CONTROLLER.debt(address(this));
+        return ERC20(address(DEBT_TOKEN)).balanceOf(address(this));
     }
 
     // ===============================================================
@@ -207,7 +221,8 @@ contract AaveLenderBorrowerStrategy is BaseLenderBorrower {
     function _sellBorrowToken(
         uint256 _amount
     ) internal virtual override {
-        AMM.exchange(CRVUSD_INDEX, ASSET_INDEX, _amount, 0);
+        // AMM.exchange(CRVUSD_INDEX, ASSET_INDEX, _amount, 0);
+        // @todo
     }
 
     /// @inheritdoc BaseLenderBorrower
@@ -222,7 +237,8 @@ contract AaveLenderBorrowerStrategy is BaseLenderBorrower {
     function _buyBorrowToken(
         uint256 _amount
     ) internal {
-        AMM.exchange(ASSET_INDEX, CRVUSD_INDEX, _amount, 0);
+        // AMM.exchange(ASSET_INDEX, CRVUSD_INDEX, _amount, 0);
+        // @todo
     }
 
     /// @notice Sweep of non-asset ERC20 tokens to governance

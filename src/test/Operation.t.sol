@@ -18,6 +18,9 @@ contract OperationTest is Setup {
         assertEq(strategy.performanceFeeRecipient(), performanceFeeRecipient);
         assertEq(strategy.keeper(), keeper);
         // TODO: add additional check on strat params
+        uint256 _asd = strategy.getLiquidateCollateralFactor();
+        assertEq(_asd, 0.73e18, "asd");
+        console2.log("Liquidate Collateral Factor", _asd);
     }
 
     function test_operation(

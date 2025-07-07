@@ -27,6 +27,10 @@ interface IFactory {
 
 contract Setup is Test, IEvents {
 
+    // Token addresses used in the tests.
+    address public addressesProvider = 0x2f39d218133AFaB8F2B819B1066c7E434Ad94E9e;
+    IStrategyInterface public lenderVault = IStrategyInterface(address(0xBe53A109B494E5c9f97b9Cd39Fe969BE68BF6204)); // yvUSDC-1
+
     // Contract instances that we will use repeatedly.
     ERC20 public asset;
     IStrategyInterface public strategy;
@@ -57,10 +61,13 @@ contract Setup is Test, IEvents {
     uint256 public profitMaxUnlockTime = 10 days;
 
     function setUp() public virtual {
+        uint256 _blockNumber = 22_763_240; // Caching for faster tests
+        vm.selectFork(vm.createFork(vm.envString("ETH_RPC_URL"), _blockNumber));
+
         _setTokenAddrs();
 
         // Set asset
-        asset = ERC20(tokenAddrs["DAI"]);
+        asset = ERC20(tokenAddrs["WBTC"]);
 
         // Set decimals
         decimals = asset.decimals();
@@ -83,8 +90,13 @@ contract Setup is Test, IEvents {
 
     function setUpStrategy() public returns (address) {
         // we save the strategy as a IStrategyInterface to give it the needed interface
-        IStrategyInterface _strategy =
-            IStrategyInterface(address(strategyFactory.newStrategy(address(asset), "Tokenized Strategy")));
+        IStrategyInterface _strategy = IStrategyInterface(
+            address(
+                strategyFactory.newStrategy(
+                    address(asset), "Tokenized Strategy", address(lenderVault), address(addressesProvider)
+                )
+            )
+        );
 
         vm.prank(management);
         _strategy.acceptManagement();

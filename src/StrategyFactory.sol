@@ -27,11 +27,20 @@ contract StrategyFactory {
     /**
      * @notice Deploy a new Strategy.
      * @param _asset The underlying asset for the strategy to use.
+     * @param _name The name of the strategy.
+     * @param _lenderVault The address of the lender vault that the strategy will use.
+     * @param _addressesProvider The address of the Aave addresses provider.
      * @return . The address of the new strategy.
      */
-    function newStrategy(address _asset, string calldata _name) external virtual returns (address) {
+    function newStrategy(
+        address _asset,
+        string calldata _name,
+        address _lenderVault,
+        address _addressesProvider
+    ) external virtual returns (address) {
         // tokenized strategies available setters.
-        IStrategyInterface _newStrategy = IStrategyInterface(address(new Strategy(_asset, _name)));
+        IStrategyInterface _newStrategy =
+            IStrategyInterface(address(new Strategy(_asset, _name, _lenderVault, _addressesProvider)));
 
         _newStrategy.setPerformanceFeeRecipient(performanceFeeRecipient);
 
