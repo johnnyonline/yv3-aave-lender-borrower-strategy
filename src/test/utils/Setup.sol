@@ -4,9 +4,11 @@ pragma solidity ^0.8.18;
 import "forge-std/console2.sol";
 import {Test} from "forge-std/Test.sol";
 
+import {WETHToUSDCExchange as Exchange} from "../../periphery/Exchange.sol";
 import {AaveLenderBorrowerStrategy as Strategy, ERC20} from "../../Strategy.sol";
 import {StrategyFactory} from "../../StrategyFactory.sol";
 import {IStrategyInterface} from "../../interfaces/IStrategyInterface.sol";
+import {IExchange} from "../../interfaces/IExchange.sol";
 
 // Inherit the events so they can be checked if desired.
 import {IEvents} from "@tokenized-strategy/interfaces/IEvents.sol";
@@ -34,6 +36,7 @@ contract Setup is Test, IEvents {
     // Contract instances that we will use repeatedly.
     ERC20 public asset;
     IStrategyInterface public strategy;
+    IExchange public exchange;
 
     StrategyFactory public strategyFactory;
 
@@ -53,21 +56,21 @@ contract Setup is Test, IEvents {
     uint256 public decimals;
     uint256 public MAX_BPS = 10_000;
 
-    // Fuzz from $0.01 of 1e6 stable coins up to 1 trillion of a 1e18 coin
-    uint256 public maxFuzzAmount = 1e30;
-    uint256 public minFuzzAmount = 10_000;
+    // Decent fuzz values for WETH (?)
+    uint256 public maxFuzzAmount = 1_000 ether;
+    uint256 public minFuzzAmount = 0.0001 ether;
 
     // Default profit max unlock time is set for 10 days
     uint256 public profitMaxUnlockTime = 10 days;
 
     function setUp() public virtual {
-        uint256 _blockNumber = 22_763_240; // Caching for faster tests
+        uint256 _blockNumber = 22_870_296; // Caching for faster tests
         vm.selectFork(vm.createFork(vm.envString("ETH_RPC_URL"), _blockNumber));
 
         _setTokenAddrs();
 
         // Set asset
-        asset = ERC20(tokenAddrs["WBTC"]);
+        asset = ERC20(tokenAddrs["WETH"]);
 
         // Set decimals
         decimals = asset.decimals();
@@ -89,11 +92,13 @@ contract Setup is Test, IEvents {
     }
 
     function setUpStrategy() public returns (address) {
+        exchange = new Exchange();
+
         // we save the strategy as a IStrategyInterface to give it the needed interface
         IStrategyInterface _strategy = IStrategyInterface(
             address(
                 strategyFactory.newStrategy(
-                    address(asset), "Tokenized Strategy", address(lenderVault), address(addressesProvider)
+                    address(asset), "Tokenized Strategy", address(lenderVault), address(addressesProvider), uint8(0)
                 )
             )
         );

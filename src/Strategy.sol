@@ -11,7 +11,8 @@ import {IPriceOracle} from "@aave-v3/interfaces/IPriceOracle.sol";
 
 import {IVaultAPROracle} from "./interfaces/IVaultAPROracle.sol";
 
-import {BaseLenderBorrower, IERC4626, ERC20, SafeERC20} from "./BaseLenderBorrower.sol";
+import {BaseLenderBorrower, IERC4626, ERC20, Math, SafeERC20} from "./BaseLenderBorrower.sol";
+import "forge-std/console2.sol";
 
 contract AaveLenderBorrowerStrategy is BaseLenderBorrower {
 
@@ -33,6 +34,7 @@ contract AaveLenderBorrowerStrategy is BaseLenderBorrower {
     IPoolDataProvider private immutable PROTOCOL_DATA_PROVIDER;
     IRewardsController private immutable REWARDS_CONTROLLER;
     IAToken public immutable A_TOKEN;
+    IAToken public immutable BORROW_A_TOKEN;
     IVariableDebtToken public immutable DEBT_TOKEN;
     IPriceOracle public immutable PRICE_ORACLE;
 
@@ -47,11 +49,14 @@ contract AaveLenderBorrowerStrategy is BaseLenderBorrower {
     /// @param _asset The strategy's asset
     /// @param _name The strategy's name
     /// @param _lenderVault The address of the lender vault
+    /// @param _addressesProvider The address of the Aave Pool Addresses Provider
+    /// @param _categoryId The eMode category ID to use for this strategy
     constructor(
         address _asset,
         string memory _name,
         address _lenderVault,
-        address _addressesProvider
+        address _addressesProvider,
+        uint8 _categoryId
     ) BaseLenderBorrower(_asset, _name, IERC4626(_lenderVault).asset(), _lenderVault) {
         ADDRESSES_PROVIDER = IPoolAddressesProvider(_addressesProvider);
         POOL = IPool(ADDRESSES_PROVIDER.getPool());
@@ -59,25 +64,23 @@ contract AaveLenderBorrowerStrategy is BaseLenderBorrower {
         REWARDS_CONTROLLER = IRewardsController(ADDRESSES_PROVIDER.getAddress(keccak256("INCENTIVES_CONTROLLER")));
         PRICE_ORACLE = IPriceOracle(ADDRESSES_PROVIDER.getPriceOracle());
 
-        (address _aToken,, address _debtToken) = PROTOCOL_DATA_PROVIDER.getReserveTokensAddresses(_asset);
+        (address _aToken,,) = PROTOCOL_DATA_PROVIDER.getReserveTokensAddresses(_asset);
         A_TOKEN = IAToken(_aToken);
+
+        (address _borrowAToken,, address _debtToken) = PROTOCOL_DATA_PROVIDER.getReserveTokensAddresses(borrowToken);
+        BORROW_A_TOKEN = IAToken(_borrowAToken);
         DEBT_TOKEN = IVariableDebtToken(_debtToken);
 
         (,,,,, bool _usageAsCollateralEnabled,,,,) = PROTOCOL_DATA_PROVIDER.getReserveConfigurationData(_asset);
         require(_usageAsCollateralEnabled, "!usageAsCollateralEnabled");
+        require(!_isSupplyPaused(), "supplyPaused");
         require(!_isBorrowPaused(), "borrowPaused");
 
-        // (,,,,, bool _usageAsCollateralEnabled,,,,) = PROTOCOL_DATA_PROVIDER.getReserveConfigurationData(borrowToken); // @todo
-        // require(_usageAsCollateralEnabled, "!usageAsCollateralEnabled");
-        // require(!_isBorrowPaused(), "borrowPaused");
+        // Set eMode
+        POOL.setUserEMode(_categoryId); // @todo -- test this
 
-        // //_setEMode(true); // use emode if it's available // @todo
-        // // Set ltv targets
-        // _autoConfigureLTVs();
-
-        // // approve spend protocol spend
-        // ERC20(address(_asset)).safeApprove(address(POOL), type(uint256).max);
-        // ERC20(address(_aToken)).safeApprove(address(POOL), type(uint256).max);
+        ERC20(_asset).forceApprove(address(POOL), type(uint256).max);
+        ERC20(borrowToken).forceApprove(address(POOL), type(uint256).max);
     }
 
     // ===============================================================
@@ -92,28 +95,28 @@ contract AaveLenderBorrowerStrategy is BaseLenderBorrower {
     function _supplyCollateral(
         uint256 _amount
     ) internal override {
-        POOL.supply(address(asset), _amount, address(this), REFERRAL);
+        if (_amount > 0) POOL.supply(address(asset), _amount, address(this), REFERRAL);
     }
 
     /// @inheritdoc BaseLenderBorrower
     function _withdrawCollateral(
         uint256 _amount
     ) internal override {
-        POOL.withdraw(address(asset), _amount, address(this));
+        if (_amount > 0) POOL.withdraw(address(asset), _amount, address(this));
     }
 
     /// @inheritdoc BaseLenderBorrower
     function _borrow(
         uint256 _amount
     ) internal override {
-        POOL.borrow(address(asset), _amount, INTEREST_RATE_MODE, REFERRAL, address(this));
+        if (_amount > 0) POOL.borrow(borrowToken, _amount, INTEREST_RATE_MODE, REFERRAL, address(this));
     }
 
     /// @inheritdoc BaseLenderBorrower
     function _repay(
         uint256 _amount
     ) internal override {
-        POOL.repay(address(asset), _amount, INTEREST_RATE_MODE, address(this));
+        if (_amount > 0) POOL.repay(borrowToken, _amount, INTEREST_RATE_MODE, address(this));
     }
 
     // ===============================================================
@@ -129,19 +132,20 @@ contract AaveLenderBorrowerStrategy is BaseLenderBorrower {
 
     /// @inheritdoc BaseLenderBorrower
     function _isSupplyPaused() internal view override returns (bool) {
-        (,,,,,,,, bool isActive, bool isFrozen) = PROTOCOL_DATA_PROVIDER.getReserveConfigurationData(address(asset));
-        return !isActive || isFrozen || PROTOCOL_DATA_PROVIDER.getPaused(address(asset));
+        (,,,,,,,, bool _isActive, bool _isFrozen) = PROTOCOL_DATA_PROVIDER.getReserveConfigurationData(address(asset));
+        return !_isActive || _isFrozen || PROTOCOL_DATA_PROVIDER.getPaused(address(asset));
     }
 
     /// @inheritdoc BaseLenderBorrower
     function _isBorrowPaused() internal view override returns (bool) {
-        (,,,,,, bool _borrowingEnabled,,,) = PROTOCOL_DATA_PROVIDER.getReserveConfigurationData(address(asset));
-        return _isSupplyPaused() || !_borrowingEnabled;
+        (,,,,,, bool _borrowingEnabled,, bool _isActive, bool _isFrozen) =
+            PROTOCOL_DATA_PROVIDER.getReserveConfigurationData(borrowToken);
+        return !_borrowingEnabled || !_isActive || _isFrozen || PROTOCOL_DATA_PROVIDER.getPaused(borrowToken);
     }
 
     /// @inheritdoc BaseLenderBorrower
     function _isLiquidatable() internal view override returns (bool) {
-        (,,,,, uint256 _healthFactor) = PROTOCOL_DATA_PROVIDER.getUserAccountData(address(this));
+        (,,,,, uint256 _healthFactor) = POOL.getUserAccountData(address(this));
         return _healthFactor < WAD; // @todo
     }
 
@@ -151,23 +155,31 @@ contract AaveLenderBorrowerStrategy is BaseLenderBorrower {
         if (_supplyCap == 0) return type(uint256).max;
 
         uint256 _scaledSupplyCap = _supplyCap * 10 ** asset.decimals();
-        uint256 _supply = A_TOKEN.totalSupply() + asset.balanceOf(address(this));
-        if (_scaledSupplyCap <= _supply) return 0;
+        uint256 _currentSupply = A_TOKEN.totalSupply() + asset.balanceOf(address(this));
+        if (_scaledSupplyCap <= _currentSupply) return 0;
 
-        return _scaledSupplyCap - _supply;
+        return _scaledSupplyCap - _currentSupply;
     }
 
     /// @inheritdoc BaseLenderBorrower
     function _maxBorrowAmount() internal view override returns (uint256) {
-        (uint256 _borrowCap,) = PROTOCOL_DATA_PROVIDER.getReserveCaps(address(asset));
-        return _borrowCap == 0 ? type(uint256).max : _borrowCap * 10 ** ERC20(borrowToken).decimals();
+        (uint256 _borrowCap,) = PROTOCOL_DATA_PROVIDER.getReserveCaps(borrowToken);
+        return Math.min(
+            _borrowCap == 0 ? type(uint256).max : _borrowCap * 10 ** ERC20(borrowToken).decimals(),
+            ERC20(borrowToken).balanceOf(address(BORROW_A_TOKEN)) // Available liquidity
+        );
+    }
+
+    /// @inheritdoc BaseLenderBorrower
+    function _lenderMaxWithdraw() internal view override returns (uint256) {
+        return BaseLenderBorrower._lenderMaxWithdraw() + 1; // + 1 for rounding
     }
 
     /// @inheritdoc BaseLenderBorrower
     function getNetBorrowApr(
         uint256 /*_newAmount*/
     ) public view override returns (uint256) {
-        return POOL.getReserveData(address(asset)).currentVariableBorrowRate / (RAY / WAD);
+        return POOL.getReserveData(borrowToken).currentVariableBorrowRate / (RAY / WAD);
     }
 
     /// @inheritdoc BaseLenderBorrower

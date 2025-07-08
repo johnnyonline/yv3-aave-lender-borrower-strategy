@@ -30,17 +30,19 @@ contract StrategyFactory {
      * @param _name The name of the strategy.
      * @param _lenderVault The address of the lender vault that the strategy will use.
      * @param _addressesProvider The address of the Aave addresses provider.
+     * @param _categoryId The eMode category ID to use for this strategy.
      * @return . The address of the new strategy.
      */
     function newStrategy(
         address _asset,
         string calldata _name,
         address _lenderVault,
-        address _addressesProvider
+        address _addressesProvider,
+        uint8 _categoryId
     ) external virtual returns (address) {
         // tokenized strategies available setters.
         IStrategyInterface _newStrategy =
-            IStrategyInterface(address(new Strategy(_asset, _name, _lenderVault, _addressesProvider)));
+            IStrategyInterface(address(new Strategy(_asset, _name, _lenderVault, _addressesProvider, _categoryId)));
 
         _newStrategy.setPerformanceFeeRecipient(performanceFeeRecipient);
 
