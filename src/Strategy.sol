@@ -9,6 +9,7 @@ import {IVariableDebtToken} from "@aave-v3/interfaces/IVariableDebtToken.sol";
 import {IRewardsController} from "@aave-v3/rewards/interfaces/IRewardsController.sol";
 import {IPriceOracle} from "@aave-v3/interfaces/IPriceOracle.sol";
 
+import {IExchange} from "./interfaces/IExchange.sol";
 import {IVaultAPROracle} from "./interfaces/IVaultAPROracle.sol";
 
 import {BaseLenderBorrower, IERC4626, ERC20, Math, SafeERC20} from "./BaseLenderBorrower.sol";
@@ -19,24 +20,55 @@ contract AaveLenderBorrowerStrategy is BaseLenderBorrower {
     using SafeERC20 for ERC20;
 
     // ===============================================================
+    // Storage
+    // ===============================================================
+
+    /// @notice If true, `getNetBorrowApr()` will return 0,
+    ///         which means we'll always consider it profitable to borrow
+    bool public forceLeverage;
+
+    // ===============================================================
     // Constants
     // ===============================================================
 
+    /// @notice The RAY constant
     uint256 private constant RAY = 1e27;
-    uint256 private constant INTEREST_RATE_MODE = 2; // interestRateMode 2 for Variable, 1 is deprecated on v3.2.0
+
+    /// @notice The AAVE interest rate mode, interestRateMode 2 for Variable, 1 is deprecated on v3.2.0
+    uint256 private constant INTEREST_RATE_MODE = 2;
+
+    /// @notice The AAVE referral code, 0 means no referral
     uint16 private constant REFERRAL = 0;
 
     /// @notice The governance address, only one that is able to call `sweep()`
     address public constant GOV = 0xFEB4acf3df3cDEA7399794D0869ef76A6EfAff52;
 
+    /// @notice The AAVE address provider
     IPoolAddressesProvider public immutable ADDRESSES_PROVIDER;
+
+    /// @notice The AAVE Pool contract
     IPool public immutable POOL;
+
+    /// @notice The AAVE Pool Data Provider contract
     IPoolDataProvider private immutable PROTOCOL_DATA_PROVIDER;
-    IRewardsController private immutable REWARDS_CONTROLLER;
+
+    /// @notice The AAVE Rewards Controller contract
+    IRewardsController private immutable REWARDS_CONTROLLER; // @todo -- ?
+
+    /// @notice The AAVE aToken for the asset, we get this when we supply collateral
     IAToken public immutable A_TOKEN;
+
+    /// @notice The AAVE aToken for the borrow token, we can borrow only as much liquidity as this token has
     IAToken public immutable BORROW_A_TOKEN;
+
+    /// @notice The AAVE variable debt token for the borrow token, we get this when we borrow
     IVariableDebtToken public immutable DEBT_TOKEN;
+
+    /// @notice The AAVE price oracle contract
     IPriceOracle public immutable PRICE_ORACLE;
+
+    /// @notice The exchange contract for buying/selling the borrow token
+    IExchange public immutable EXCHANGE;
 
     /// @notice The lender vault APR oracle contract
     IVaultAPROracle public constant VAULT_APR_ORACLE = IVaultAPROracle(0x1981AD9F44F2EA9aDd2dC4AD7D075c102C70aF92);
@@ -50,12 +82,14 @@ contract AaveLenderBorrowerStrategy is BaseLenderBorrower {
     /// @param _name The strategy's name
     /// @param _lenderVault The address of the lender vault
     /// @param _addressesProvider The address of the Aave Pool Addresses Provider
+    /// @param _exchange The exchange contract for buying/selling borrow token
     /// @param _categoryId The eMode category ID to use for this strategy
     constructor(
         address _asset,
         string memory _name,
         address _lenderVault,
         address _addressesProvider,
+        address _exchange,
         uint8 _categoryId
     ) BaseLenderBorrower(_asset, _name, IERC4626(_lenderVault).asset(), _lenderVault) {
         ADDRESSES_PROVIDER = IPoolAddressesProvider(_addressesProvider);
@@ -76,8 +110,13 @@ contract AaveLenderBorrowerStrategy is BaseLenderBorrower {
         require(!_isSupplyPaused(), "supplyPaused");
         require(!_isBorrowPaused(), "borrowPaused");
 
-        // Set eMode
+        EXCHANGE = IExchange(_exchange);
+        require(EXCHANGE.TOKEN() == borrowToken && EXCHANGE.PAIRED_WITH() == _asset, "!exchange");
+
         POOL.setUserEMode(_categoryId); // @todo -- test this
+
+        ERC20(_asset).forceApprove(_exchange, type(uint256).max);
+        ERC20(borrowToken).forceApprove(_exchange, type(uint256).max);
 
         ERC20(_asset).forceApprove(address(POOL), type(uint256).max);
         ERC20(borrowToken).forceApprove(address(POOL), type(uint256).max);
@@ -86,6 +125,14 @@ contract AaveLenderBorrowerStrategy is BaseLenderBorrower {
     // ===============================================================
     // Management functions
     // ===============================================================
+
+    /// @notice Set the forceLeverage flag
+    /// @param _forceLeverage The new value for the forceLeverage flag
+    function setForceLeverage(
+        bool _forceLeverage
+    ) external onlyManagement {
+        forceLeverage = _forceLeverage;
+    }
 
     // ===============================================================
     // Write functions
@@ -146,7 +193,7 @@ contract AaveLenderBorrowerStrategy is BaseLenderBorrower {
     /// @inheritdoc BaseLenderBorrower
     function _isLiquidatable() internal view override returns (bool) {
         (,,,,, uint256 _healthFactor) = POOL.getUserAccountData(address(this));
-        return _healthFactor < WAD; // @todo
+        return _healthFactor < WAD;
     }
 
     /// @inheritdoc BaseLenderBorrower
@@ -179,7 +226,7 @@ contract AaveLenderBorrowerStrategy is BaseLenderBorrower {
     function getNetBorrowApr(
         uint256 /*_newAmount*/
     ) public view override returns (uint256) {
-        return POOL.getReserveData(borrowToken).currentVariableBorrowRate / (RAY / WAD);
+        return forceLeverage ? 0 : POOL.getReserveData(borrowToken).currentVariableBorrowRate / (RAY / WAD);
     }
 
     /// @inheritdoc BaseLenderBorrower
@@ -233,8 +280,11 @@ contract AaveLenderBorrowerStrategy is BaseLenderBorrower {
     function _sellBorrowToken(
         uint256 _amount
     ) internal virtual override {
-        // AMM.exchange(CRVUSD_INDEX, ASSET_INDEX, _amount, 0);
-        // @todo
+        EXCHANGE.swap(
+            _amount,
+            0, // minAmount
+            true // fromBorrow
+        );
     }
 
     /// @inheritdoc BaseLenderBorrower
@@ -249,8 +299,11 @@ contract AaveLenderBorrowerStrategy is BaseLenderBorrower {
     function _buyBorrowToken(
         uint256 _amount
     ) internal {
-        // AMM.exchange(ASSET_INDEX, CRVUSD_INDEX, _amount, 0);
-        // @todo
+        EXCHANGE.swap(
+            _amount,
+            0, // minAmount
+            false // fromBorrow
+        );
     }
 
     /// @notice Sweep of non-asset ERC20 tokens to governance

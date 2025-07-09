@@ -5,7 +5,7 @@ import "forge-std/console2.sol";
 import {Test} from "forge-std/Test.sol";
 
 import {WETHToUSDCExchange as Exchange} from "../../periphery/Exchange.sol";
-import {AaveLenderBorrowerStrategy as Strategy, ERC20} from "../../Strategy.sol";
+import {AaveLenderBorrowerStrategy as Strategy, ERC20, IPool, IPriceOracle, IVaultAPROracle} from "../../Strategy.sol";
 import {StrategyFactory} from "../../StrategyFactory.sol";
 import {IStrategyInterface} from "../../interfaces/IStrategyInterface.sol";
 import {IExchange} from "../../interfaces/IExchange.sol";
@@ -98,7 +98,12 @@ contract Setup is Test, IEvents {
         IStrategyInterface _strategy = IStrategyInterface(
             address(
                 strategyFactory.newStrategy(
-                    address(asset), "Tokenized Strategy", address(lenderVault), address(addressesProvider), uint8(0)
+                    address(asset),
+                    "Tokenized Strategy",
+                    address(lenderVault),
+                    address(addressesProvider),
+                    address(exchange),
+                    uint8(0)
                 )
             )
         );
@@ -166,6 +171,54 @@ contract Setup is Test, IEvents {
         tokenAddrs["USDT"] = 0xdAC17F958D2ee523a2206206994597C13D831ec7;
         tokenAddrs["DAI"] = 0x6B175474E89094C44Da98b954EedeAC495271d0F;
         tokenAddrs["USDC"] = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
+    }
+
+    function simulateLiquidation() internal {
+        dropCollateralPrice();
+
+        (bool trigger,) = strategy.tendTrigger();
+        require(trigger, "!liquidatable");
+
+        address _liquidator = address(696969);
+        airdrop(ERC20(strategy.borrowToken()), _liquidator, strategy.balanceOfDebt() * 2);
+
+        vm.startPrank(_liquidator);
+        ERC20(strategy.borrowToken()).approve(strategy.POOL(), type(uint256).max);
+        IPool(strategy.POOL()).liquidationCall(
+            strategy.asset(), strategy.borrowToken(), address(strategy), strategy.balanceOfDebt(), false
+        );
+        vm.stopPrank();
+    }
+
+    function dropCollateralPrice() public {
+        IPriceOracle oracle = IPriceOracle(strategy.PRICE_ORACLE());
+        uint256 answer = oracle.getAssetPrice(strategy.asset());
+        uint256 newAnswer = answer * 50 / 100; // 50% drop
+        vm.mockCall(
+            address(oracle),
+            abi.encodeWithSelector(IPriceOracle.getAssetPrice.selector, strategy.asset()),
+            abi.encode(newAnswer) // 50% drop
+        );
+    }
+
+    function _toUsd(uint256 _amount, address _token) internal view returns (uint256) {
+        if (_amount == 0) return 0;
+        unchecked {
+            return (_amount * _getPrice(_token)) / (uint256(10 ** ERC20(_token).decimals()));
+        }
+    }
+
+    function _fromUsd(uint256 _amount, address _token) internal view returns (uint256) {
+        if (_amount == 0) return 0;
+        unchecked {
+            return (_amount * (uint256(10 ** ERC20(_token).decimals()))) / _getPrice(_token);
+        }
+    }
+
+    function _getPrice(
+        address _asset
+    ) internal view returns (uint256 price) {
+        return IPriceOracle(strategy.PRICE_ORACLE()).getAssetPrice(_asset);
     }
 
 }

@@ -30,6 +30,7 @@ contract StrategyFactory {
      * @param _name The name of the strategy.
      * @param _lenderVault The address of the lender vault that the strategy will use.
      * @param _addressesProvider The address of the Aave addresses provider.
+     * @param _exchange The exchange contract for buying/selling borrow token.
      * @param _categoryId The eMode category ID to use for this strategy.
      * @return . The address of the new strategy.
      */
@@ -38,11 +39,13 @@ contract StrategyFactory {
         string calldata _name,
         address _lenderVault,
         address _addressesProvider,
+        address _exchange,
         uint8 _categoryId
     ) external virtual returns (address) {
         // tokenized strategies available setters.
-        IStrategyInterface _newStrategy =
-            IStrategyInterface(address(new Strategy(_asset, _name, _lenderVault, _addressesProvider, _categoryId)));
+        IStrategyInterface _newStrategy = IStrategyInterface(
+            address(new Strategy(_asset, _name, _lenderVault, _addressesProvider, _exchange, _categoryId))
+        );
 
         _newStrategy.setPerformanceFeeRecipient(performanceFeeRecipient);
 
