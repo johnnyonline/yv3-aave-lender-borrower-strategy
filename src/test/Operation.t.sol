@@ -4,7 +4,7 @@ pragma solidity ^0.8.18;
 import {IBaseStrategy} from "@tokenized-strategy/interfaces/IBaseStrategy.sol";
 
 import "forge-std/console2.sol";
-import {Setup, ERC20, IPool, IStrategyInterface, IVaultAPROracle} from "./utils/Setup.sol";
+import {Setup, ERC20, IPool, IStrategyInterface, ICentralAprOracle} from "./utils/Setup.sol";
 
 contract OperationTest is Setup {
 
@@ -27,52 +27,6 @@ contract OperationTest is Setup {
         assertEq(strategy.keeper(), keeper);
         // TODO: add additional check on strat params
     }
-
-    // function test_invalidDeployment() public {
-    //     // strategyFactory.newStrategy(
-    //     //             address(asset),
-    //     //             "Tokenized Strategy",
-    //     //             address(lenderVault),
-    //     //             address(addressesProvider),
-    //     //             address(exchange),
-    //     //             uint8(0)
-    //     //         )
-    //     vm.expectRevert("!exchange");
-    //     strategyFactory.newStrategy(
-    //         IAddressesRegistry(wrongAddressesRegistry),
-    //         IStrategy(address(lenderVault)),
-    //         AggregatorInterface(address(0)),
-    //         IExchange(address(exchange)),
-    //         "Tokenized Strategy"
-    //     );
-
-    //     vm.expectRevert();
-    //     strategyFactory.newStrategy(
-    //         IAddressesRegistry(addressesRegistry),
-    //         IStrategy(tokenAddrs["YFI"]),
-    //         AggregatorInterface(address(0)),
-    //         IExchange(address(exchange)),
-    //         "Tokenized Strategy"
-    //     );
-
-    //     vm.expectRevert("!priceFeed");
-    //     strategyFactory.newStrategy(
-    //         IAddressesRegistry(addressesRegistry),
-    //         IStrategy(address(lenderVault)),
-    //         AggregatorInterface(address(tokenAddrs["YFI"])),
-    //         IExchange(address(exchange)),
-    //         "Tokenized Strategy"
-    //     );
-
-    //     vm.expectRevert();
-    //     strategyFactory.newStrategy(
-    //         IAddressesRegistry(addressesRegistry),
-    //         IStrategy(address(lenderVault)),
-    //         AggregatorInterface(address(0)),
-    //         IExchange(address(0)),
-    //         "Tokenized Strategy"
-    //     );
-    // }
 
     function test_operation(
         uint256 _amount
@@ -319,9 +273,8 @@ contract OperationTest is Setup {
 
         // lose some lent
         vm.startPrank(address(strategy));
-        ERC20(strategy.lenderVault()).transfer(
-            address(420), ERC20(strategy.lenderVault()).balanceOf(address(strategy)) * 10 / 100
-        );
+        ERC20(strategy.lenderVault())
+            .transfer(address(420), ERC20(strategy.lenderVault()).balanceOf(address(strategy)) * 10 / 100);
         vm.stopPrank();
 
         vm.startPrank(emergencyAdmin);
@@ -518,17 +471,22 @@ contract OperationTest is Setup {
         assertTrue(!trigger);
 
         // Borrow too much.
-        uint256 toBorrow = (
-            strategy.balanceOfCollateral()
-                * ((strategy.getLiquidateCollateralFactor() * (strategy.warningLTVMultiplier() + 100)) / MAX_BPS)
-        ) / 1e18;
+        uint256 toBorrow =
+            (strategy.balanceOfCollateral()
+                    * ((strategy.getLiquidateCollateralFactor() * (strategy.warningLTVMultiplier() + 100)) / MAX_BPS))
+                / 1e18;
 
         toBorrow = _fromUsd(_toUsd(toBorrow, strategy.asset()), strategy.borrowToken());
 
         vm.startPrank(address(strategy));
-        IPool(strategy.POOL()).borrow(
-            strategy.borrowToken(), toBorrow - strategy.balanceOfDebt(), INTEREST_RATE_MODE, REFERRAL, address(strategy)
-        );
+        IPool(strategy.POOL())
+            .borrow(
+                strategy.borrowToken(),
+                toBorrow - strategy.balanceOfDebt(),
+                INTEREST_RATE_MODE,
+                REFERRAL,
+                address(strategy)
+            );
         vm.stopPrank();
 
         (trigger,) = strategy.tendTrigger();
@@ -594,7 +552,9 @@ contract OperationTest is Setup {
 
         // (almost) zero out rewards
         vm.mockCall(
-            strategy.VAULT_APR_ORACLE(), abi.encodeWithSelector(IVaultAPROracle.getStrategyApr.selector), abi.encode(1)
+            strategy.CENTRAL_APR_ORACLE(),
+            abi.encodeWithSelector(ICentralAprOracle.getStrategyApr.selector),
+            abi.encode(1)
         );
         assertEq(strategy.getNetRewardApr(0), 1);
 

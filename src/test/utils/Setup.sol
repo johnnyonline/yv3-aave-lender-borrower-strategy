@@ -4,8 +4,14 @@ pragma solidity ^0.8.18;
 import "forge-std/console2.sol";
 import {Test} from "forge-std/Test.sol";
 
-import {WETHToUSDCExchange as Exchange} from "../../periphery/Exchange.sol";
-import {AaveLenderBorrowerStrategy as Strategy, ERC20, IPool, IPriceOracle, IVaultAPROracle} from "../../Strategy.sol";
+import {WETHToUSDCExchange as Exchange} from "../../periphery/WETHToUSDCExchange.sol";
+import {
+    AaveLenderBorrowerStrategy as Strategy,
+    ERC20,
+    IPool,
+    IPriceOracle,
+    ICentralAprOracle
+} from "../../Strategy.sol";
 import {StrategyFactory} from "../../StrategyFactory.sol";
 import {IStrategyInterface} from "../../interfaces/IStrategyInterface.sol";
 import {IExchange} from "../../interfaces/IExchange.sol";
@@ -114,7 +120,11 @@ contract Setup is Test, IEvents {
         return address(_strategy);
     }
 
-    function depositIntoStrategy(IStrategyInterface _strategy, address _user, uint256 _amount) public {
+    function depositIntoStrategy(
+        IStrategyInterface _strategy,
+        address _user,
+        uint256 _amount
+    ) public {
         vm.prank(_user);
         asset.approve(address(_strategy), _amount);
 
@@ -122,7 +132,11 @@ contract Setup is Test, IEvents {
         _strategy.deposit(_amount, _user);
     }
 
-    function mintAndDepositIntoStrategy(IStrategyInterface _strategy, address _user, uint256 _amount) public {
+    function mintAndDepositIntoStrategy(
+        IStrategyInterface _strategy,
+        address _user,
+        uint256 _amount
+    ) public {
         airdrop(asset, _user, _amount);
         depositIntoStrategy(_strategy, _user, _amount);
     }
@@ -144,12 +158,19 @@ contract Setup is Test, IEvents {
         assertEq(_totalAssets, _totalDebt + _totalIdle, "!Added");
     }
 
-    function airdrop(ERC20 _asset, address _to, uint256 _amount) public {
+    function airdrop(
+        ERC20 _asset,
+        address _to,
+        uint256 _amount
+    ) public {
         uint256 balanceBefore = _asset.balanceOf(_to);
         deal(address(_asset), _to, balanceBefore + _amount);
     }
 
-    function setFees(uint16 _protocolFee, uint16 _performanceFee) public {
+    function setFees(
+        uint16 _protocolFee,
+        uint16 _performanceFee
+    ) public {
         address gov = IFactory(factory).governance();
 
         // Need to make sure there is a protocol fee recipient to set the fee.
@@ -184,9 +205,10 @@ contract Setup is Test, IEvents {
 
         vm.startPrank(_liquidator);
         ERC20(strategy.borrowToken()).approve(strategy.POOL(), type(uint256).max);
-        IPool(strategy.POOL()).liquidationCall(
-            strategy.asset(), strategy.borrowToken(), address(strategy), strategy.balanceOfDebt(), false
-        );
+        IPool(strategy.POOL())
+            .liquidationCall(
+                strategy.asset(), strategy.borrowToken(), address(strategy), strategy.balanceOfDebt(), false
+            );
         vm.stopPrank();
     }
 
@@ -201,14 +223,20 @@ contract Setup is Test, IEvents {
         );
     }
 
-    function _toUsd(uint256 _amount, address _token) internal view returns (uint256) {
+    function _toUsd(
+        uint256 _amount,
+        address _token
+    ) internal view returns (uint256) {
         if (_amount == 0) return 0;
         unchecked {
             return (_amount * _getPrice(_token)) / (uint256(10 ** ERC20(_token).decimals()));
         }
     }
 
-    function _fromUsd(uint256 _amount, address _token) internal view returns (uint256) {
+    function _fromUsd(
+        uint256 _amount,
+        address _token
+    ) internal view returns (uint256) {
         if (_amount == 0) return 0;
         unchecked {
             return (_amount * (uint256(10 ** ERC20(_token).decimals()))) / _getPrice(_token);

@@ -7,7 +7,7 @@ interface IStrategyInterface is ILenderBorrower {
 
     function POOL() external view returns (address);
     function PRICE_ORACLE() external view returns (address);
-    function VAULT_APR_ORACLE() external view returns (address);
+    function CENTRAL_APR_ORACLE() external view returns (address);
     function forceLeverage() external view returns (bool);
 
     function setForceLeverage(

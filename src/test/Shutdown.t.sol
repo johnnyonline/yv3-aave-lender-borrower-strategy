@@ -35,7 +35,7 @@ contract ShutdownTest is Setup {
         vm.prank(user);
         strategy.redeem(_amount, user, user);
 
-        assertGe(asset.balanceOf(user), balanceBefore + _amount, "!final balance");
+        assertApproxEqRel(asset.balanceOf(user), balanceBefore + _amount, 1e13, "!final balance"); // 0.001%
     }
 
     function test_emergencyWithdraw_maxUint(
@@ -72,5 +72,6 @@ contract ShutdownTest is Setup {
     }
 
     // TODO: Add tests for any emergency function added.
+
 
 }

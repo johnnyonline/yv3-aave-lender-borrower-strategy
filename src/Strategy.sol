@@ -1,19 +1,17 @@
 // SPDX-License-Identifier: AGPL-3.0
-pragma solidity ^0.8.18;
+pragma solidity 0.8.23;
 
 import {IAToken} from "@aave-v3/interfaces/IAToken.sol";
 import {IPool} from "@aave-v3/interfaces/IPool.sol";
 import {IPoolDataProvider} from "@aave-v3/interfaces/IPoolDataProvider.sol";
 import {IPoolAddressesProvider} from "@aave-v3/interfaces/IPoolAddressesProvider.sol";
 import {IVariableDebtToken} from "@aave-v3/interfaces/IVariableDebtToken.sol";
-import {IRewardsController} from "@aave-v3/rewards/interfaces/IRewardsController.sol";
 import {IPriceOracle} from "@aave-v3/interfaces/IPriceOracle.sol";
 
 import {IExchange} from "./interfaces/IExchange.sol";
-import {IVaultAPROracle} from "./interfaces/IVaultAPROracle.sol";
+import {ICentralAprOracle} from "./interfaces/ICentralAprOracle.sol";
 
 import {BaseLenderBorrower, IERC4626, ERC20, Math, SafeERC20} from "./BaseLenderBorrower.sol";
-import "forge-std/console2.sol";
 
 contract AaveLenderBorrowerStrategy is BaseLenderBorrower {
 
@@ -41,6 +39,7 @@ contract AaveLenderBorrowerStrategy is BaseLenderBorrower {
     uint16 private constant REFERRAL = 0;
 
     /// @notice The governance address, only one that is able to call `sweep()`
+    /// @dev This is yChad
     address public constant GOV = 0xFEB4acf3df3cDEA7399794D0869ef76A6EfAff52;
 
     /// @notice The AAVE address provider
@@ -50,10 +49,7 @@ contract AaveLenderBorrowerStrategy is BaseLenderBorrower {
     IPool public immutable POOL;
 
     /// @notice The AAVE Pool Data Provider contract
-    IPoolDataProvider private immutable PROTOCOL_DATA_PROVIDER;
-
-    /// @notice The AAVE Rewards Controller contract
-    IRewardsController private immutable REWARDS_CONTROLLER; // @todo -- ?
+    IPoolDataProvider public immutable POOL_DATA_PROVIDER;
 
     /// @notice The AAVE aToken for the asset, we get this when we supply collateral
     IAToken public immutable A_TOKEN;
@@ -70,8 +66,9 @@ contract AaveLenderBorrowerStrategy is BaseLenderBorrower {
     /// @notice The exchange contract for buying/selling the borrow token
     IExchange public immutable EXCHANGE;
 
-    /// @notice The lender vault APR oracle contract
-    IVaultAPROracle public constant VAULT_APR_ORACLE = IVaultAPROracle(0x1981AD9F44F2EA9aDd2dC4AD7D075c102C70aF92);
+    /// @notice The central APR oracle contract. Used to get the lender vault's APR
+    ICentralAprOracle public constant CENTRAL_APR_ORACLE =
+        ICentralAprOracle(0x1981AD9F44F2EA9aDd2dC4AD7D075c102C70aF92);
 
     // ===============================================================
     // Constructor
@@ -94,26 +91,25 @@ contract AaveLenderBorrowerStrategy is BaseLenderBorrower {
     ) BaseLenderBorrower(_asset, _name, IERC4626(_lenderVault).asset(), _lenderVault) {
         ADDRESSES_PROVIDER = IPoolAddressesProvider(_addressesProvider);
         POOL = IPool(ADDRESSES_PROVIDER.getPool());
-        PROTOCOL_DATA_PROVIDER = IPoolDataProvider(ADDRESSES_PROVIDER.getPoolDataProvider());
-        REWARDS_CONTROLLER = IRewardsController(ADDRESSES_PROVIDER.getAddress(keccak256("INCENTIVES_CONTROLLER")));
+        POOL_DATA_PROVIDER = IPoolDataProvider(ADDRESSES_PROVIDER.getPoolDataProvider());
         PRICE_ORACLE = IPriceOracle(ADDRESSES_PROVIDER.getPriceOracle());
 
-        (address _aToken,,) = PROTOCOL_DATA_PROVIDER.getReserveTokensAddresses(_asset);
+        (address _aToken,,) = POOL_DATA_PROVIDER.getReserveTokensAddresses(_asset);
         A_TOKEN = IAToken(_aToken);
 
-        (address _borrowAToken,, address _debtToken) = PROTOCOL_DATA_PROVIDER.getReserveTokensAddresses(borrowToken);
+        (address _borrowAToken,, address _debtToken) = POOL_DATA_PROVIDER.getReserveTokensAddresses(borrowToken);
         BORROW_A_TOKEN = IAToken(_borrowAToken);
         DEBT_TOKEN = IVariableDebtToken(_debtToken);
 
-        (,,,,, bool _usageAsCollateralEnabled,,,,) = PROTOCOL_DATA_PROVIDER.getReserveConfigurationData(_asset);
+        (,,,,, bool _usageAsCollateralEnabled,,,,) = POOL_DATA_PROVIDER.getReserveConfigurationData(_asset);
         require(_usageAsCollateralEnabled, "!usageAsCollateralEnabled");
         require(!_isSupplyPaused(), "supplyPaused");
         require(!_isBorrowPaused(), "borrowPaused");
 
         EXCHANGE = IExchange(_exchange);
-        require(EXCHANGE.TOKEN() == borrowToken && EXCHANGE.PAIRED_WITH() == _asset, "!exchange");
+        require(EXCHANGE.BORROW() == borrowToken && EXCHANGE.COLLATERAL() == _asset, "!exchange");
 
-        POOL.setUserEMode(_categoryId); // @todo -- test this
+        POOL.setUserEMode(_categoryId);
 
         ERC20(_asset).forceApprove(_exchange, type(uint256).max);
         ERC20(borrowToken).forceApprove(_exchange, type(uint256).max);
@@ -123,7 +119,7 @@ contract AaveLenderBorrowerStrategy is BaseLenderBorrower {
     }
 
     // ===============================================================
-    // Management functions
+    // Management/emergency functions
     // ===============================================================
 
     /// @notice Set the forceLeverage flag
@@ -132,6 +128,30 @@ contract AaveLenderBorrowerStrategy is BaseLenderBorrower {
         bool _forceLeverage
     ) external onlyManagement {
         forceLeverage = _forceLeverage;
+    }
+
+    /// @notice Manually buy borrow token
+    /// @dev Potentially can never reach `_buyBorrowToken()` in `_liquidatePosition()`
+    ///      because of lender vault accounting (i.e. `balanceOfLentAssets() == 0` is never true)
+    function buyBorrowToken(
+        uint256 _amount
+    ) external onlyEmergencyAuthorized {
+        if (_amount == type(uint256).max) _amount = balanceOfAsset();
+        _buyBorrowToken(_amount);
+    }
+
+    // ===============================================================
+    // Governance functions
+    // ===============================================================
+
+    /// @notice Sweep of non-asset ERC20 tokens to governance
+    /// @param _token The ERC20 token to sweep
+    function sweep(
+        ERC20 _token
+    ) external {
+        require(msg.sender == GOV, "!gov");
+        require(_token != asset, "!asset");
+        _token.safeTransfer(GOV, _token.balanceOf(address(this)));
     }
 
     // ===============================================================
@@ -179,26 +199,26 @@ contract AaveLenderBorrowerStrategy is BaseLenderBorrower {
 
     /// @inheritdoc BaseLenderBorrower
     function _isSupplyPaused() internal view override returns (bool) {
-        (,,,,,,,, bool _isActive, bool _isFrozen) = PROTOCOL_DATA_PROVIDER.getReserveConfigurationData(address(asset));
-        return !_isActive || _isFrozen || PROTOCOL_DATA_PROVIDER.getPaused(address(asset));
+        (,,,,,,,, bool _isActive, bool _isFrozen) = POOL_DATA_PROVIDER.getReserveConfigurationData(address(asset));
+        return !_isActive || _isFrozen || POOL_DATA_PROVIDER.getPaused(address(asset));
     }
 
     /// @inheritdoc BaseLenderBorrower
     function _isBorrowPaused() internal view override returns (bool) {
         (,,,,,, bool _borrowingEnabled,, bool _isActive, bool _isFrozen) =
-            PROTOCOL_DATA_PROVIDER.getReserveConfigurationData(borrowToken);
-        return !_borrowingEnabled || !_isActive || _isFrozen || PROTOCOL_DATA_PROVIDER.getPaused(borrowToken);
+            POOL_DATA_PROVIDER.getReserveConfigurationData(borrowToken);
+        return !_borrowingEnabled || !_isActive || _isFrozen || POOL_DATA_PROVIDER.getPaused(borrowToken);
     }
 
     /// @inheritdoc BaseLenderBorrower
     function _isLiquidatable() internal view override returns (bool) {
         (,,,,, uint256 _healthFactor) = POOL.getUserAccountData(address(this));
-        return _healthFactor < WAD;
+        return _healthFactor < WAD && _healthFactor > 0;
     }
 
     /// @inheritdoc BaseLenderBorrower
     function _maxCollateralDeposit() internal view override returns (uint256) {
-        (, uint256 _supplyCap) = PROTOCOL_DATA_PROVIDER.getReserveCaps(address(asset));
+        (, uint256 _supplyCap) = POOL_DATA_PROVIDER.getReserveCaps(address(asset));
         if (_supplyCap == 0) return type(uint256).max;
 
         uint256 _scaledSupplyCap = _supplyCap * 10 ** asset.decimals();
@@ -210,10 +230,10 @@ contract AaveLenderBorrowerStrategy is BaseLenderBorrower {
 
     /// @inheritdoc BaseLenderBorrower
     function _maxBorrowAmount() internal view override returns (uint256) {
-        (uint256 _borrowCap,) = PROTOCOL_DATA_PROVIDER.getReserveCaps(borrowToken);
+        (uint256 _borrowCap,) = POOL_DATA_PROVIDER.getReserveCaps(borrowToken);
         return Math.min(
             _borrowCap == 0 ? type(uint256).max : _borrowCap * 10 ** ERC20(borrowToken).decimals(),
-            ERC20(borrowToken).balanceOf(address(BORROW_A_TOKEN)) // Available liquidity
+            POOL.getVirtualUnderlyingBalance(address(borrowToken)) // Available liquidity
         );
     }
 
@@ -233,12 +253,12 @@ contract AaveLenderBorrowerStrategy is BaseLenderBorrower {
     function getNetRewardApr(
         uint256 _newAmount
     ) public view override returns (uint256) {
-        return VAULT_APR_ORACLE.getStrategyApr(address(lenderVault), int256(_newAmount));
+        return forceLeverage ? 1 : CENTRAL_APR_ORACLE.getStrategyApr(address(lenderVault), int256(_newAmount));
     }
 
     /// @inheritdoc BaseLenderBorrower
     function getLiquidateCollateralFactor() public view override returns (uint256) {
-        (, uint256 _ltv,,,,,,,,) = PROTOCOL_DATA_PROVIDER.getReserveConfigurationData(address(asset));
+        (, uint256 _ltv,,,,,,,,) = POOL_DATA_PROVIDER.getReserveConfigurationData(address(asset));
         return _ltv * (WAD / MAX_BPS);
     }
 
@@ -304,26 +324,6 @@ contract AaveLenderBorrowerStrategy is BaseLenderBorrower {
             0, // minAmount
             false // fromBorrow
         );
-    }
-
-    /// @notice Sweep of non-asset ERC20 tokens to governance
-    /// @param _token The ERC20 token to sweep
-    function sweep(
-        ERC20 _token
-    ) external {
-        require(msg.sender == GOV, "!gov");
-        require(_token != asset, "!asset");
-        _token.safeTransfer(GOV, _token.balanceOf(address(this)));
-    }
-
-    /// @notice Manually buy borrow token
-    /// @dev Potentially can never reach `_buyBorrowToken()` in `_liquidatePosition()`
-    ///      because of lender vault accounting (i.e. `balanceOfLentAssets() == 0` is never true)
-    function buyBorrowToken(
-        uint256 _amount
-    ) external onlyEmergencyAuthorized {
-        if (_amount == type(uint256).max) _amount = balanceOfAsset();
-        _buyBorrowToken(_amount);
     }
 
 }
