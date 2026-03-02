@@ -62,7 +62,7 @@ contract Setup is Test, IEvents {
     uint256 public decimals;
     uint256 public MAX_BPS = 10_000;
 
-    // Decent fuzz values for WETH (?)
+    // Decent fuzz values for WETH
     uint256 public maxFuzzAmount = 1_000 ether;
     uint256 public minFuzzAmount = 0.0001 ether;
 
@@ -70,7 +70,7 @@ contract Setup is Test, IEvents {
     uint256 public profitMaxUnlockTime = 10 days;
 
     function setUp() public virtual {
-        uint256 _blockNumber = 22_870_296; // Caching for faster tests
+        uint256 _blockNumber = 24_570_258; // Caching for faster tests
         vm.selectFork(vm.createFork(vm.envString("ETH_RPC_URL"), _blockNumber));
 
         _setTokenAddrs();
