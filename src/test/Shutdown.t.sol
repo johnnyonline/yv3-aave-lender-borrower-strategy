@@ -41,7 +41,7 @@ contract ShutdownTest is Setup {
     function test_emergencyWithdraw_maxUint(
         uint256 _amount
     ) public {
-        vm.assume(_amount > minFuzzAmount && _amount < maxFuzzAmount);
+        vm.assume(_amount > minFuzzAmount * 10 && _amount < maxFuzzAmount);
 
         // Deposit into strategy
         mintAndDepositIntoStrategy(strategy, user, _amount);

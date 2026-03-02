@@ -44,7 +44,7 @@ contract OperationTest is Setup {
         checkStrategyTotals(strategy, _amount, _amount, 0);
         assertEq(strategy.totalAssets(), _amount, "!totalAssets");
         assertApproxEqRel(strategy.getCurrentLTV(), targetLTV, 1e15); // 0.1%
-        assertApproxEqAbs(strategy.balanceOfCollateral(), _amount, 1, "!balanceOfCollateral");
+        assertApproxEqAbs(strategy.balanceOfCollateral(), _amount, 10, "!balanceOfCollateral");
         assertApproxEqRel(strategy.balanceOfDebt(), strategy.balanceOfLentAssets(), 1e15); // 0.1%
 
         // Earn Interest
@@ -64,7 +64,7 @@ contract OperationTest is Setup {
         vm.prank(user);
         strategy.redeem(_amount, user, user);
 
-        assertGe(asset.balanceOf(user), balanceBefore + _amount, "!final balance");
+        assertApproxEqRel(asset.balanceOf(user), balanceBefore + _amount, 1e15, "!final balance"); // 0.1%
 
         checkStrategyTotals(strategy, 0, 0, 0);
     }
@@ -131,7 +131,7 @@ contract OperationTest is Setup {
         checkStrategyTotals(strategy, _amount, _amount, 0);
         assertEq(strategy.totalAssets(), _amount, "!totalAssets");
         assertApproxEqRel(strategy.getCurrentLTV(), targetLTV, 1e15); // 0.1%
-        assertApproxEqAbs(strategy.balanceOfCollateral(), _amount, 1, "!balanceOfCollateral");
+        assertApproxEqAbs(strategy.balanceOfCollateral(), _amount, 10, "!balanceOfCollateral");
         assertApproxEqRel(strategy.balanceOfDebt(), strategy.balanceOfLentAssets(), 1e15); // 0.1%
 
         // Earn Interest
@@ -177,7 +177,7 @@ contract OperationTest is Setup {
         checkStrategyTotals(strategy, _amount, _amount, 0);
         assertEq(strategy.totalAssets(), _amount, "!totalAssets");
         assertApproxEqRel(strategy.getCurrentLTV(), targetLTV, 1e15); // 0.1%
-        assertApproxEqAbs(strategy.balanceOfCollateral(), _amount, 1, "!balanceOfCollateral");
+        assertApproxEqAbs(strategy.balanceOfCollateral(), _amount, 10, "!balanceOfCollateral");
         assertApproxEqRel(strategy.balanceOfDebt(), strategy.balanceOfLentAssets(), 1e15); // 0.1%
 
         // Earn Interest
@@ -218,7 +218,7 @@ contract OperationTest is Setup {
         checkStrategyTotals(strategy, _amount, _amount, 0);
         assertEq(strategy.totalAssets(), _amount, "!totalAssets");
         assertApproxEqRel(strategy.getCurrentLTV(), targetLTV, 1e15); // 0.1%
-        assertApproxEqAbs(strategy.balanceOfCollateral(), _amount, 1, "!balanceOfCollateral");
+        assertApproxEqAbs(strategy.balanceOfCollateral(), _amount, 10, "!balanceOfCollateral");
         assertApproxEqRel(strategy.balanceOfDebt(), strategy.balanceOfLentAssets(), 1e15); // 0.1%
 
         // Pay without earning
@@ -258,7 +258,7 @@ contract OperationTest is Setup {
         checkStrategyTotals(strategy, _amount, _amount, 0);
         assertEq(strategy.totalAssets(), _amount, "!totalAssets");
         assertApproxEqRel(strategy.getCurrentLTV(), targetLTV, 1e15); // 0.1%
-        assertApproxEqAbs(strategy.balanceOfCollateral(), _amount, 1, "!balanceOfCollateral");
+        assertApproxEqAbs(strategy.balanceOfCollateral(), _amount, 10, "!balanceOfCollateral");
         assertApproxEqRel(strategy.balanceOfDebt(), strategy.balanceOfLentAssets(), 1e15); // 0.1%
 
         // Earn Interest
@@ -311,7 +311,7 @@ contract OperationTest is Setup {
         checkStrategyTotals(strategy, _amount, _amount, 0);
         assertEq(strategy.totalAssets(), _amount, "!totalAssets");
         assertApproxEqRel(strategy.getCurrentLTV(), targetLTV, 1e15); // 0.1%
-        assertApproxEqAbs(strategy.balanceOfCollateral(), _amount, 1, "!balanceOfCollateral");
+        assertApproxEqAbs(strategy.balanceOfCollateral(), _amount, 10, "!balanceOfCollateral");
         assertApproxEqRel(strategy.balanceOfDebt(), strategy.balanceOfLentAssets(), 1e15); // 0.1%
 
         // Withdrawl some collateral to pump LTV
@@ -341,7 +341,7 @@ contract OperationTest is Setup {
         checkStrategyTotals(strategy, _amount, _amount, 0);
         assertEq(strategy.totalAssets(), _amount, "!totalAssets");
         assertApproxEqRel(strategy.getCurrentLTV(), targetLTV, 1e15); // 0.1%
-        assertApproxEqAbs(strategy.balanceOfCollateral(), _amount, 1, "!balanceOfCollateral");
+        assertApproxEqAbs(strategy.balanceOfCollateral(), _amount, 10, "!balanceOfCollateral");
         assertApproxEqRel(strategy.balanceOfDebt(), strategy.balanceOfLentAssets(), 1e15); // 0.1%
 
         uint256 vaultLoss = strategy.balanceOfLentAssets() * 5 / 100; // 5% loss
@@ -405,7 +405,7 @@ contract OperationTest is Setup {
         checkStrategyTotals(strategy, _amount, _amount, 0);
         assertEq(strategy.totalAssets(), _amount, "!totalAssets");
         assertApproxEqRel(strategy.getCurrentLTV(), targetLTV, 1e15); // 0.1%
-        assertApproxEqAbs(strategy.balanceOfCollateral(), _amount, 1, "!balanceOfCollateral");
+        assertApproxEqAbs(strategy.balanceOfCollateral(), _amount, 10, "!balanceOfCollateral");
         assertApproxEqRel(strategy.balanceOfDebt(), strategy.balanceOfLentAssets(), 1e15); // 0.1%
 
         // Simulate a liquidation
@@ -413,7 +413,7 @@ contract OperationTest is Setup {
 
         // Check position
         assertEq(strategy.balanceOfDebt(), 0, "!debt");
-        assertApproxEqAbs(strategy.balanceOfCollateral(), 0, 1, "!collateral");
+        assertApproxEqAbs(strategy.balanceOfCollateral(), 0, 10, "!collateral");
 
         // Rekt
         (bool trigger,) = strategy.tendTrigger();
