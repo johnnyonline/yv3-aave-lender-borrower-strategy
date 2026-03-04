@@ -576,4 +576,33 @@ contract OperationTest is Setup {
         strategy.setForceLeverage(false);
     }
 
+    function test_setAllowed_onlyManagement(
+        address _notManagement
+    ) public {
+        vm.assume(_notManagement != management && _notManagement != address(strategy));
+        vm.expectRevert("!management");
+        vm.prank(_notManagement);
+        strategy.setAllowed(_notManagement, true);
+
+        // Management can set allowed
+        vm.prank(management);
+        strategy.setAllowed(_notManagement, true);
+        assertTrue(strategy.allowed(_notManagement));
+    }
+
+    function test_availableDepositLimit_notAllowed(
+        address _newUser
+    ) public {
+        vm.assume(_newUser != user && _newUser != address(strategy));
+
+        assertFalse(strategy.allowed(_newUser));
+        assertEq(strategy.availableDepositLimit(_newUser), 0);
+
+        vm.prank(management);
+        strategy.setAllowed(_newUser, true);
+
+        assertTrue(strategy.allowed(_newUser));
+        assertGt(strategy.availableDepositLimit(_newUser), 0);
+    }
+
 }

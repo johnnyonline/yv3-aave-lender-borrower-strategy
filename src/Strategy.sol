@@ -27,6 +27,9 @@ contract AaveLenderBorrowerStrategy is BaseLenderBorrower {
     ///         which means we'll always consider it profitable to borrow
     bool public forceLeverage;
 
+    /// @notice Addresses allowed to deposit
+    mapping(address => bool) public allowed;
+
     // ===============================================================
     // Constants
     // ===============================================================
@@ -126,6 +129,16 @@ contract AaveLenderBorrowerStrategy is BaseLenderBorrower {
         forceLeverage = _forceLeverage;
     }
 
+    /// @notice Allow (or disallow) a specific address to deposit into the strategy
+    /// @param _address Address to allow or disallow
+    /// @param _allowed True to allow deposits from `_address`, false to block
+    function setAllowed(
+        address _address,
+        bool _allowed
+    ) external onlyManagement {
+        allowed[_address] = _allowed;
+    }
+
     /// @notice Manually buy borrow token
     /// @dev Potentially can never reach `_buyBorrowToken()` in `_liquidatePosition()`
     ///      because of lender vault accounting (i.e. `balanceOfLentAssets() == 0` is never true)
@@ -185,6 +198,13 @@ contract AaveLenderBorrowerStrategy is BaseLenderBorrower {
     // ===============================================================
     // View functions
     // ===============================================================
+
+    /// @inheritdoc BaseLenderBorrower
+    function availableDepositLimit(
+        address _owner
+    ) public view override returns (uint256) {
+        return allowed[_owner] || _owner == address(this) ? BaseLenderBorrower.availableDepositLimit(_owner) : 0;
+    }
 
     /// @inheritdoc BaseLenderBorrower
     function _getPrice(
