@@ -5,6 +5,7 @@ import {IAToken} from "@aave-v3/interfaces/IAToken.sol";
 import {IPool} from "@aave-v3/interfaces/IPool.sol";
 import {IPoolDataProvider} from "@aave-v3/interfaces/IPoolDataProvider.sol";
 import {IPoolAddressesProvider} from "@aave-v3/interfaces/IPoolAddressesProvider.sol";
+import {IRewardsController} from "@aave-v3/rewards/interfaces/IRewardsController.sol";
 import {IVariableDebtToken} from "@aave-v3/interfaces/IVariableDebtToken.sol";
 import {IPriceOracle} from "@aave-v3/interfaces/IPriceOracle.sol";
 
@@ -27,6 +28,12 @@ contract AaveLenderBorrowerStrategy is BaseLenderBorrower {
     ///         which means we'll always consider it profitable to borrow
     bool public forceLeverage;
 
+    /// @notice Address of the auction contract to use for selling reward tokens
+    address public auction;
+
+    /// @notice List of reward tokens
+    address[] public rewardTokens;
+
     /// @notice Addresses allowed to deposit
     mapping(address => bool) public allowed;
 
@@ -45,6 +52,9 @@ contract AaveLenderBorrowerStrategy is BaseLenderBorrower {
 
     /// @notice The AAVE Pool Data Provider contract
     IPoolDataProvider public immutable POOL_DATA_PROVIDER;
+
+    /// @notice The AAVE Rewards Controller contract
+    IRewardsController private immutable REWARDS_CONTROLLER;
 
     /// @notice The AAVE aToken for the asset, we get this when we supply collateral
     IAToken public immutable A_TOKEN;
@@ -84,6 +94,7 @@ contract AaveLenderBorrowerStrategy is BaseLenderBorrower {
         ADDRESSES_PROVIDER = IPoolAddressesProvider(_addressesProvider);
         POOL = IPool(ADDRESSES_PROVIDER.getPool());
         POOL_DATA_PROVIDER = IPoolDataProvider(ADDRESSES_PROVIDER.getPoolDataProvider());
+        REWARDS_CONTROLLER = IRewardsController(ADDRESSES_PROVIDER.getAddress(keccak256("INCENTIVES_CONTROLLER")));
         PRICE_ORACLE = IPriceOracle(ADDRESSES_PROVIDER.getPriceOracle());
 
         (address _aToken,,) = POOL_DATA_PROVIDER.getReserveTokensAddresses(_asset);
@@ -143,6 +154,15 @@ contract AaveLenderBorrowerStrategy is BaseLenderBorrower {
         bool _allowed
     ) external onlyManagement {
         allowed[_address] = _allowed;
+    }
+
+    /// @notice Claim all Aave rewards to this contract
+    /// @dev After claiming, rewards will need to be swept manually using the `sweep()` function
+    function claimRewards() external onlyManagement {
+        address[] memory assets = new address[](2);
+        assets[0] = address(A_TOKEN);
+        assets[1] = address(DEBT_TOKEN);
+        REWARDS_CONTROLLER.claimAllRewardsToSelf(assets);
     }
 
     /// @notice Sweep stuck tokens to management
@@ -273,7 +293,7 @@ contract AaveLenderBorrowerStrategy is BaseLenderBorrower {
     // ===============================================================
 
     /// @inheritdoc BaseLenderBorrower
-    function _claimRewards() internal pure override {
+    function _claimRewards() internal override {
         return;
     }
 
