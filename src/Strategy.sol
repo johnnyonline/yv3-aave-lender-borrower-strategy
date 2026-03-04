@@ -34,12 +34,6 @@ contract AaveLenderBorrowerStrategy is BaseLenderBorrower {
     /// @notice The RAY constant
     uint256 private constant RAY = 1e27;
 
-    /// @notice The AAVE interest rate mode, interestRateMode 2 for Variable, 1 is deprecated on v3.2.0
-    uint256 private constant INTEREST_RATE_MODE = 2;
-
-    /// @notice The AAVE referral code, 0 means no referral
-    uint16 private constant REFERRAL = 0;
-
     /// @notice The governance address, only one that is able to call `sweep()`
     /// @dev This is yChad
     address public constant GOV = 0xFEB4acf3df3cDEA7399794D0869ef76A6EfAff52;
