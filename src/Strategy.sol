@@ -53,9 +53,6 @@ contract AaveLenderBorrowerStrategy is BaseLenderBorrower {
     /// @notice The AAVE aToken for the asset, we get this when we supply collateral
     IAToken public immutable A_TOKEN;
 
-    /// @notice The AAVE aToken for the borrow token, we can borrow only as much liquidity as this token has
-    IAToken public immutable BORROW_A_TOKEN;
-
     /// @notice The AAVE variable debt token for the borrow token, we get this when we borrow
     IVariableDebtToken public immutable DEBT_TOKEN;
 
@@ -96,8 +93,7 @@ contract AaveLenderBorrowerStrategy is BaseLenderBorrower {
         (address _aToken,,) = POOL_DATA_PROVIDER.getReserveTokensAddresses(_asset);
         A_TOKEN = IAToken(_aToken);
 
-        (address _borrowAToken,, address _debtToken) = POOL_DATA_PROVIDER.getReserveTokensAddresses(borrowToken);
-        BORROW_A_TOKEN = IAToken(_borrowAToken);
+        (,, address _debtToken) = POOL_DATA_PROVIDER.getReserveTokensAddresses(borrowToken);
         DEBT_TOKEN = IVariableDebtToken(_debtToken);
 
         (,,,,, bool _usageAsCollateralEnabled,,,,) = POOL_DATA_PROVIDER.getReserveConfigurationData(_asset);
