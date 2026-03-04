@@ -11,7 +11,9 @@ import {IPriceOracle} from "@aave-v3/interfaces/IPriceOracle.sol";
 import {IExchange} from "./interfaces/IExchange.sol";
 import {ICentralAprOracle} from "./interfaces/ICentralAprOracle.sol";
 
-import {BaseLenderBorrower, IERC4626, ERC20, Math, SafeERC20} from "./BaseLenderBorrower.sol";
+import {AaveOps} from "./libraries/AaveOps.sol";
+
+import {BaseLenderBorrower, IERC4626, ERC20, SafeERC20} from "./BaseLenderBorrower.sol";
 
 contract AaveLenderBorrowerStrategy is BaseLenderBorrower {
 
@@ -162,28 +164,28 @@ contract AaveLenderBorrowerStrategy is BaseLenderBorrower {
     function _supplyCollateral(
         uint256 _amount
     ) internal override {
-        if (_amount > 0) POOL.supply(address(asset), _amount, address(this), REFERRAL);
+        AaveOps.supply(POOL, address(asset), _amount);
     }
 
     /// @inheritdoc BaseLenderBorrower
     function _withdrawCollateral(
         uint256 _amount
     ) internal override {
-        if (_amount > 0) POOL.withdraw(address(asset), _amount, address(this));
+        AaveOps.withdraw(POOL, address(asset), _amount);
     }
 
     /// @inheritdoc BaseLenderBorrower
     function _borrow(
         uint256 _amount
     ) internal override {
-        if (_amount > 0) POOL.borrow(borrowToken, _amount, INTEREST_RATE_MODE, REFERRAL, address(this));
+        AaveOps.borrow(POOL, borrowToken, _amount);
     }
 
     /// @inheritdoc BaseLenderBorrower
     function _repay(
         uint256 _amount
     ) internal override {
-        if (_amount > 0) POOL.repay(borrowToken, _amount, INTEREST_RATE_MODE, address(this));
+        AaveOps.repay(POOL, borrowToken, _amount);
     }
 
     // ===============================================================
@@ -199,42 +201,27 @@ contract AaveLenderBorrowerStrategy is BaseLenderBorrower {
 
     /// @inheritdoc BaseLenderBorrower
     function _isSupplyPaused() internal view override returns (bool) {
-        (,,,,,,,, bool _isActive, bool _isFrozen) = POOL_DATA_PROVIDER.getReserveConfigurationData(address(asset));
-        return !_isActive || _isFrozen || POOL_DATA_PROVIDER.getPaused(address(asset));
+        return AaveOps.isSupplyPaused(POOL_DATA_PROVIDER, address(asset));
     }
 
     /// @inheritdoc BaseLenderBorrower
     function _isBorrowPaused() internal view override returns (bool) {
-        (,,,,,, bool _borrowingEnabled,, bool _isActive, bool _isFrozen) =
-            POOL_DATA_PROVIDER.getReserveConfigurationData(borrowToken);
-        return !_borrowingEnabled || !_isActive || _isFrozen || POOL_DATA_PROVIDER.getPaused(borrowToken);
+        return AaveOps.isBorrowPaused(POOL_DATA_PROVIDER, borrowToken);
     }
 
     /// @inheritdoc BaseLenderBorrower
     function _isLiquidatable() internal view override returns (bool) {
-        (,,,,, uint256 _healthFactor) = POOL.getUserAccountData(address(this));
-        return _healthFactor < WAD && _healthFactor > 0;
+        return AaveOps.isLiquidatable(POOL);
     }
 
     /// @inheritdoc BaseLenderBorrower
     function _maxCollateralDeposit() internal view override returns (uint256) {
-        (, uint256 _supplyCap) = POOL_DATA_PROVIDER.getReserveCaps(address(asset));
-        if (_supplyCap == 0) return type(uint256).max;
-
-        uint256 _scaledSupplyCap = _supplyCap * 10 ** asset.decimals();
-        uint256 _currentSupply = A_TOKEN.totalSupply() + asset.balanceOf(address(this));
-        if (_scaledSupplyCap <= _currentSupply) return 0;
-
-        return _scaledSupplyCap - _currentSupply;
+        return AaveOps.maxCollateralDeposit(POOL_DATA_PROVIDER, A_TOKEN, address(asset));
     }
 
     /// @inheritdoc BaseLenderBorrower
     function _maxBorrowAmount() internal view override returns (uint256) {
-        (uint256 _borrowCap,) = POOL_DATA_PROVIDER.getReserveCaps(borrowToken);
-        return Math.min(
-            _borrowCap == 0 ? type(uint256).max : _borrowCap * 10 ** ERC20(borrowToken).decimals(),
-            POOL.getVirtualUnderlyingBalance(address(borrowToken)) // Available liquidity
-        );
+        return AaveOps.maxBorrowAmount(POOL_DATA_PROVIDER, POOL, borrowToken);
     }
 
     /// @inheritdoc BaseLenderBorrower
@@ -258,8 +245,7 @@ contract AaveLenderBorrowerStrategy is BaseLenderBorrower {
 
     /// @inheritdoc BaseLenderBorrower
     function getLiquidateCollateralFactor() public view override returns (uint256) {
-        (, uint256 _ltv,,,,,,,,) = POOL_DATA_PROVIDER.getReserveConfigurationData(address(asset));
-        return _ltv * (WAD / MAX_BPS);
+        return AaveOps.getLiquidateCollateralFactor(POOL_DATA_PROVIDER, address(asset));
     }
 
     /// @inheritdoc BaseLenderBorrower
