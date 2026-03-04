@@ -29,6 +29,10 @@ library AaveOps {
     // View functions
     // ===============================================================
 
+    /// @notice Checks if supplying the asset is paused
+    /// @param _poolDataProvider The AAVE pool data provider
+    /// @param _asset The asset address
+    /// @return True if supply is paused
     function isSupplyPaused(
         IPoolDataProvider _poolDataProvider,
         address _asset
@@ -37,6 +41,10 @@ library AaveOps {
         return !_isActive || _isFrozen || _poolDataProvider.getPaused(_asset);
     }
 
+    /// @notice Checks if borrowing the token is paused
+    /// @param _poolDataProvider The AAVE pool data provider
+    /// @param _borrowToken The borrow token address
+    /// @return True if borrowing is paused
     function isBorrowPaused(
         IPoolDataProvider _poolDataProvider,
         address _borrowToken
@@ -46,6 +54,9 @@ library AaveOps {
         return !_borrowingEnabled || !_isActive || _isFrozen || _poolDataProvider.getPaused(_borrowToken);
     }
 
+    /// @notice Checks if the caller's position is liquidatable
+    /// @param _pool The AAVE pool
+    /// @return True if health factor is below 1
     function isLiquidatable(
         IPool _pool
     ) external view returns (bool) {
@@ -53,6 +64,11 @@ library AaveOps {
         return _healthFactor < WAD && _healthFactor > 0;
     }
 
+    /// @notice Returns the maximum amount of collateral that can be deposited
+    /// @param _poolDataProvider The AAVE pool data provider
+    /// @param _aToken The aToken for the asset
+    /// @param _asset The collateral asset address
+    /// @return The maximum deposit amount, capped by the supply cap
     function maxCollateralDeposit(
         IPoolDataProvider _poolDataProvider,
         IAToken _aToken,
@@ -68,6 +84,11 @@ library AaveOps {
         return _scaledSupplyCap - _currentSupply;
     }
 
+    /// @notice Returns the maximum amount of borrow token that can be borrowed
+    /// @param _poolDataProvider The AAVE pool data provider
+    /// @param _pool The AAVE pool
+    /// @param _borrowToken The borrow token address
+    /// @return The maximum borrow amount, capped by borrow cap and available liquidity
     function maxBorrowAmount(
         IPoolDataProvider _poolDataProvider,
         IPool _pool,
@@ -80,6 +101,10 @@ library AaveOps {
         );
     }
 
+    /// @notice Returns the liquidation collateral factor (LTV) for the asset
+    /// @param _poolDataProvider The AAVE pool data provider
+    /// @param _asset The collateral asset address
+    /// @return The liquidation collateral factor in WAD
     function getLiquidateCollateralFactor(
         IPoolDataProvider _poolDataProvider,
         address _asset
@@ -92,6 +117,10 @@ library AaveOps {
     // Write functions
     // ===============================================================
 
+    /// @notice Supplies collateral to the AAVE pool
+    /// @param _pool The AAVE pool
+    /// @param _asset The asset to supply
+    /// @param _amount The amount to supply
     function supply(
         IPool _pool,
         address _asset,
@@ -100,6 +129,10 @@ library AaveOps {
         if (_amount > 0) _pool.supply(_asset, _amount, address(this), REFERRAL);
     }
 
+    /// @notice Withdraws collateral from the AAVE pool
+    /// @param _pool The AAVE pool
+    /// @param _asset The asset to withdraw
+    /// @param _amount The amount to withdraw
     function withdraw(
         IPool _pool,
         address _asset,
@@ -108,6 +141,10 @@ library AaveOps {
         if (_amount > 0) _pool.withdraw(_asset, _amount, address(this));
     }
 
+    /// @notice Borrows tokens from the AAVE pool
+    /// @param _pool The AAVE pool
+    /// @param _borrowToken The token to borrow
+    /// @param _amount The amount to borrow
     function borrow(
         IPool _pool,
         address _borrowToken,
@@ -116,6 +153,10 @@ library AaveOps {
         if (_amount > 0) _pool.borrow(_borrowToken, _amount, INTEREST_RATE_MODE, REFERRAL, address(this));
     }
 
+    /// @notice Repays borrowed tokens to the AAVE pool
+    /// @param _pool The AAVE pool
+    /// @param _borrowToken The token to repay
+    /// @param _amount The amount to repay
     function repay(
         IPool _pool,
         address _borrowToken,
