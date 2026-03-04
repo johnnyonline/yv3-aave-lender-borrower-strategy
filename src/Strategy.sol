@@ -28,12 +28,6 @@ contract AaveLenderBorrowerStrategy is BaseLenderBorrower {
     ///         which means we'll always consider it profitable to borrow
     bool public forceLeverage;
 
-    /// @notice Address of the auction contract to use for selling reward tokens
-    address public auction;
-
-    /// @notice List of reward tokens
-    address[] public rewardTokens;
-
     /// @notice Addresses allowed to deposit
     mapping(address => bool) public allowed;
 
@@ -293,7 +287,7 @@ contract AaveLenderBorrowerStrategy is BaseLenderBorrower {
     // ===============================================================
 
     /// @inheritdoc BaseLenderBorrower
-    function _claimRewards() internal override {
+    function _claimRewards() internal pure override {
         return;
     }
 
