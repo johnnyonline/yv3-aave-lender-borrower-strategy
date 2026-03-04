@@ -37,10 +37,6 @@ contract AaveLenderBorrowerStrategy is BaseLenderBorrower {
     /// @notice The RAY constant
     uint256 private constant RAY = 1e27;
 
-    /// @notice The governance address, only one that is able to call `sweep()`
-    /// @dev This is yChad
-    address public constant GOV = 0xFEB4acf3df3cDEA7399794D0869ef76A6EfAff52;
-
     /// @notice The AAVE address provider
     IPoolAddressesProvider public immutable ADDRESSES_PROVIDER;
 
@@ -114,7 +110,21 @@ contract AaveLenderBorrowerStrategy is BaseLenderBorrower {
     }
 
     // ===============================================================
-    // Management/emergency functions
+    // Emergency functions
+    // ===============================================================
+
+    /// @notice Manually buy borrow token
+    /// @dev Potentially can never reach `_buyBorrowToken()` in `_liquidatePosition()`
+    ///      because of lender vault accounting (i.e. `balanceOfLentAssets() == 0` is never true)
+    function buyBorrowToken(
+        uint256 _amount
+    ) external onlyEmergencyAuthorized {
+        if (_amount == type(uint256).max) _amount = balanceOfAsset();
+        _buyBorrowToken(_amount);
+    }
+
+    // ===============================================================
+    // Management functions
     // ===============================================================
 
     /// @notice Set the forceLeverage flag
@@ -135,28 +145,18 @@ contract AaveLenderBorrowerStrategy is BaseLenderBorrower {
         allowed[_address] = _allowed;
     }
 
-    /// @notice Manually buy borrow token
-    /// @dev Potentially can never reach `_buyBorrowToken()` in `_liquidatePosition()`
-    ///      because of lender vault accounting (i.e. `balanceOfLentAssets() == 0` is never true)
-    function buyBorrowToken(
-        uint256 _amount
-    ) external onlyEmergencyAuthorized {
-        if (_amount == type(uint256).max) _amount = balanceOfAsset();
-        _buyBorrowToken(_amount);
-    }
-
-    // ===============================================================
-    // Governance functions
-    // ===============================================================
-
-    /// @notice Sweep of non-asset ERC20 tokens to governance
-    /// @param _token The ERC20 token to sweep
+    /// @notice Sweep stuck tokens to management
+    /// @dev Cannot sweep any tokens the strategy is expected to hold
+    /// @param _token The token to sweep
     function sweep(
-        ERC20 _token
-    ) external {
-        require(msg.sender == GOV, "!gov");
-        require(_token != asset, "!asset");
-        _token.safeTransfer(GOV, _token.balanceOf(address(this)));
+        address _token
+    ) external onlyManagement {
+        require(
+            _token != address(asset) && _token != borrowToken && _token != address(lenderVault)
+                && _token != address(A_TOKEN) && _token != address(DEBT_TOKEN),
+            "!asset"
+        );
+        ERC20(_token).safeTransfer(TokenizedStrategy.management(), ERC20(_token).balanceOf(address(this)));
     }
 
     // ===============================================================
