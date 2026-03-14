@@ -6,6 +6,7 @@ import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {IPool} from "@aave-v3/interfaces/IPool.sol";
 import {IAToken} from "@aave-v3/interfaces/IAToken.sol";
 import {IPoolDataProvider} from "@aave-v3/interfaces/IPoolDataProvider.sol";
+import {IPriceOracleSentinel} from "@aave-v3/interfaces/IPriceOracleSentinel.sol";
 import {DataTypes} from "@aave-v3/protocol/libraries/types/DataTypes.sol";
 
 library AaveOps {
@@ -42,7 +43,7 @@ library AaveOps {
         return !_isActive || _isFrozen || _poolDataProvider.getPaused(_asset);
     }
 
-    /// @notice Checks if borrowing the token is paused
+    /// @notice Checks if borrowing the token is paused, including PriceOracleSentinel check for L2 deployments
     /// @param _poolDataProvider The AAVE pool data provider
     /// @param _borrowToken The borrow token address
     /// @return True if borrowing is paused
@@ -52,17 +53,29 @@ library AaveOps {
     ) external view returns (bool) {
         (,,,,,, bool _borrowingEnabled,, bool _isActive, bool _isFrozen) =
             _poolDataProvider.getReserveConfigurationData(_borrowToken);
-        return !_borrowingEnabled || !_isActive || _isFrozen || _poolDataProvider.getPaused(_borrowToken);
+        if (!_borrowingEnabled || !_isActive || _isFrozen || _poolDataProvider.getPaused(_borrowToken)) return true;
+
+        address _sentinel = _poolDataProvider.ADDRESSES_PROVIDER().getPriceOracleSentinel();
+        if (_sentinel == address(0)) return false;
+
+        return !IPriceOracleSentinel(_sentinel).isBorrowAllowed();
     }
 
-    /// @notice Checks if the caller's position is liquidatable
+    /// @notice Checks if the caller's position is liquidatable, including PriceOracleSentinel check for L2 deployments
+    /// @param _poolDataProvider The AAVE pool data provider
     /// @param _pool The AAVE pool
-    /// @return True if health factor is below 1
+    /// @return True if health factor is below 1 and liquidations are allowed
     function isLiquidatable(
+        IPoolDataProvider _poolDataProvider,
         IPool _pool
     ) external view returns (bool) {
         (,,,,, uint256 _healthFactor) = _pool.getUserAccountData(address(this));
-        return _healthFactor < WAD && _healthFactor > 0;
+        if (_healthFactor >= WAD || _healthFactor == 0) return false;
+
+        address _sentinel = _poolDataProvider.ADDRESSES_PROVIDER().getPriceOracleSentinel();
+        if (_sentinel == address(0)) return true;
+
+        return IPriceOracleSentinel(_sentinel).isLiquidationAllowed();
     }
 
     /// @notice Returns the maximum amount of collateral that can be deposited

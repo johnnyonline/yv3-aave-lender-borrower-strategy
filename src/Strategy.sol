@@ -240,7 +240,7 @@ contract AaveLenderBorrowerStrategy is BaseLenderBorrower {
 
     /// @inheritdoc BaseLenderBorrower
     function _isLiquidatable() internal view override returns (bool) {
-        return AaveOps.isLiquidatable(POOL);
+        return AaveOps.isLiquidatable(POOL_DATA_PROVIDER, POOL);
     }
 
     /// @inheritdoc BaseLenderBorrower
