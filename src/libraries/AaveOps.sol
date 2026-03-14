@@ -6,6 +6,7 @@ import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {IPool} from "@aave-v3/interfaces/IPool.sol";
 import {IAToken} from "@aave-v3/interfaces/IAToken.sol";
 import {IPoolDataProvider} from "@aave-v3/interfaces/IPoolDataProvider.sol";
+import {DataTypes} from "@aave-v3/protocol/libraries/types/DataTypes.sol";
 
 library AaveOps {
 
@@ -101,14 +102,25 @@ library AaveOps {
         );
     }
 
-    /// @notice Returns the liquidation collateral factor (LTV) for the asset
+    /// @notice Returns the liquidation collateral factor (LTV) for the asset, eMode-aware
+    /// @param _pool The AAVE pool
     /// @param _poolDataProvider The AAVE pool data provider
     /// @param _asset The collateral asset address
     /// @return The liquidation collateral factor in WAD
     function getLiquidateCollateralFactor(
+        IPool _pool,
         IPoolDataProvider _poolDataProvider,
         address _asset
     ) external view returns (uint256) {
+        uint8 _categoryId = uint8(_pool.getUserEMode(address(this)));
+        if (_categoryId != 0) {
+            uint16 _id = _pool.getReserveData(_asset).id;
+            uint128 _bm = _pool.getEModeCategoryCollateralBitmap(_categoryId);
+            if (((_bm >> _id) & 1) != 0) {
+                DataTypes.CollateralConfig memory _cfg = _pool.getEModeCategoryCollateralConfig(_categoryId);
+                return uint256(_cfg.ltv) * 1e14;
+            }
+        }
         (, uint256 _ltv,,,,,,,,) = _poolDataProvider.getReserveConfigurationData(_asset);
         return _ltv * (WAD / MAX_BPS);
     }

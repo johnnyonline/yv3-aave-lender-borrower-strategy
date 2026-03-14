@@ -269,7 +269,7 @@ contract AaveLenderBorrowerStrategy is BaseLenderBorrower {
 
     /// @inheritdoc BaseLenderBorrower
     function getLiquidateCollateralFactor() public view override returns (uint256) {
-        return AaveOps.getLiquidateCollateralFactor(POOL_DATA_PROVIDER, address(asset));
+        return AaveOps.getLiquidateCollateralFactor(POOL, POOL_DATA_PROVIDER, address(asset));
     }
 
     /// @inheritdoc BaseLenderBorrower
