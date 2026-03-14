@@ -117,7 +117,6 @@ contract Setup is Test, IEvents {
         vm.startPrank(management);
         _strategy.acceptManagement();
         _strategy.setAllowed(user, true);
-        _strategy.setForceLeverage(true);
         vm.stopPrank();
 
         return address(_strategy);
