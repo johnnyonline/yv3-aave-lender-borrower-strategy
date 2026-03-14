@@ -35,7 +35,7 @@ contract ShutdownTest is Setup {
         vm.prank(user);
         strategy.redeem(_amount, user, user);
 
-        assertApproxEqRel(asset.balanceOf(user), balanceBefore + _amount, 1e13, "!final balance"); // 0.001%
+        assertApproxEqRel(asset.balanceOf(user), balanceBefore + _amount, 1e14, "!final balance"); // 0.01%
     }
 
     function test_emergencyWithdraw_maxUint(

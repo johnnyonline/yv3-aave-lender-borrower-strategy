@@ -315,6 +315,7 @@ contract AaveLenderBorrowerStrategy is BaseLenderBorrower {
     function _sellBorrowToken(
         uint256 _amount
     ) internal virtual override {
+        if (_amount == 0) return;
         EXCHANGE.swap(
             _amount,
             0, // minAmount
@@ -334,6 +335,7 @@ contract AaveLenderBorrowerStrategy is BaseLenderBorrower {
     function _buyBorrowToken(
         uint256 _amount
     ) internal {
+        if (_amount == 0) return;
         EXCHANGE.swap(
             _amount,
             0, // minAmount

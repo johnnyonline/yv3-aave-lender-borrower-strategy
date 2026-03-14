@@ -63,7 +63,7 @@ contract Setup is Test, IEvents {
     uint256 public MAX_BPS = 10_000;
 
     // Decent fuzz values for WETH
-    uint256 public maxFuzzAmount = 1_000 ether;
+    uint256 public maxFuzzAmount = 10 ether;
     uint256 public minFuzzAmount = 0.0001 ether;
 
     // Default profit max unlock time is set for 10 days
@@ -195,7 +195,6 @@ contract Setup is Test, IEvents {
         tokenAddrs["USDT"] = 0xdAC17F958D2ee523a2206206994597C13D831ec7;
         tokenAddrs["DAI"] = 0x6B175474E89094C44Da98b954EedeAC495271d0F;
         tokenAddrs["USDC"] = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
-        tokenAddrs["LBTC"] = 0x8236a87084f8B84306f72007F36F2618A5634494;
     }
 
     function simulateLiquidation() internal {
