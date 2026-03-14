@@ -105,6 +105,11 @@ contract AaveLenderBorrowerStrategy is BaseLenderBorrower {
         EXCHANGE = IExchange(_exchange);
         require(EXCHANGE.BORROW() == borrowToken && EXCHANGE.COLLATERAL() == _asset, "!exchange");
 
+        if (_categoryId != 0) {
+            uint16 _borrowId = POOL.getReserveData(borrowToken).id;
+            require(((POOL.getEModeCategoryBorrowableBitmap(_categoryId) >> _borrowId) & 1) != 0, "!eModeBorrow");
+        }
+
         POOL.setUserEMode(_categoryId);
 
         ERC20(_asset).forceApprove(_exchange, type(uint256).max);
