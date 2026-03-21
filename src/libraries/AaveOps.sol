@@ -126,14 +126,7 @@ library AaveOps {
         address _asset
     ) external view returns (uint256) {
         uint8 _categoryId = uint8(_pool.getUserEMode(address(this)));
-        if (_categoryId != 0) {
-            uint16 _id = _pool.getReserveData(_asset).id;
-            uint128 _bm = _pool.getEModeCategoryCollateralBitmap(_categoryId);
-            if (((_bm >> _id) & 1) != 0) {
-                DataTypes.CollateralConfig memory _cfg = _pool.getEModeCategoryCollateralConfig(_categoryId);
-                return uint256(_cfg.ltv) * 1e14;
-            }
-        }
+        if (_categoryId != 0) return uint256(_pool.getEModeCategoryCollateralConfig(_categoryId).ltv) * 1e14;
         (, uint256 _ltv,,,,,,,,) = _poolDataProvider.getReserveConfigurationData(_asset);
         return _ltv * (WAD / MAX_BPS);
     }
