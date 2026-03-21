@@ -3,19 +3,17 @@ pragma solidity 0.8.23;
 
 import {IERC20, SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
-import {IExchange} from "../interfaces/IExchange.sol";
 import {ICurveTricrypto} from "../interfaces/ICurveTricrypto.sol";
 
-contract WETHToUSDCExchange is IExchange {
+import {BaseExchange} from "./BaseExchange.sol";
+
+contract WETHToUSDCExchange is BaseExchange {
 
     using SafeERC20 for IERC20;
 
     // ===============================================================
     // Constants
     // ===============================================================
-
-    /// @notice Address of SMS on Mainnet
-    address public constant SMS = 0x16388463d60FFE0661Cf7F1f31a7D658aC790ff7;
 
     /// @notice Tricrypto Curve Pool
     uint256 private constant USDC_INDEX_USDC_WETH_POOL = 0;
@@ -31,8 +29,8 @@ contract WETHToUSDCExchange is IExchange {
     // ===============================================================
 
     constructor() {
-        USDC.safeApprove(address(TRICRYPTO), type(uint256).max);
-        WETH.safeApprove(address(TRICRYPTO), type(uint256).max);
+        USDC.forceApprove(address(TRICRYPTO), type(uint256).max);
+        WETH.forceApprove(address(TRICRYPTO), type(uint256).max);
     }
 
     // ============================================================================================
@@ -41,62 +39,26 @@ contract WETHToUSDCExchange is IExchange {
 
     /// @notice Returns the address of the borrow token
     /// @return Address of the borrow token
-    function BORROW() external pure override returns (address) {
+    function BORROW() public pure override returns (address) {
         return address(USDC);
     }
 
     /// @notice Returns the address of the collateral token
     /// @return Address of the collateral token
-    function COLLATERAL() external pure override returns (address) {
+    function COLLATERAL() public pure override returns (address) {
         return address(WETH);
-    }
-
-    // ============================================================================================
-    // Mutative functions
-    // ============================================================================================
-
-    /// @notice Swaps between borrow token and the collateral token
-    /// @param _amount Amount of tokens to swap
-    /// @param _minAmount Minimum amount of tokens to receive
-    /// @param _fromToken If true, swap from borrow token to collateral token, false otherwise
-    /// @return Amount of tokens received
-    function swap(
-        uint256 _amount,
-        uint256 _minAmount,
-        bool _fromToken
-    ) external override returns (uint256) {
-        return (_fromToken ? _swapFrom(_amount, _minAmount) : _swapTo(_amount, _minAmount));
-    }
-
-    /// @notice Sweep tokens from the contract
-    /// @dev This contract should never hold any tokens
-    /// @param _token The token to sweep
-    function sweep(
-        IERC20 _token
-    ) external {
-        require(msg.sender == SMS, "!caller");
-        uint256 _balance = _token.balanceOf(address(this));
-        require(_balance > 0, "!balance");
-        _token.safeTransfer(SMS, _balance);
     }
 
     // ============================================================================================
     // Internal functions
     // ============================================================================================
 
-    /// @notice Swaps from the borrow token to the collateral token
-    /// @param _amount Amount of borrow tokens to swap
-    /// @param _minAmount Minimum amount of collateral tokens to receive
-    /// @return Amount of collateral tokens received
+    /// @inheritdoc BaseExchange
     function _swapFrom(
-        uint256 _amount,
-        uint256 _minAmount
-    ) internal returns (uint256) {
-        // Pull USDC
-        USDC.safeTransferFrom(msg.sender, address(this), _amount);
-
+        uint256 _amount
+    ) internal override returns (uint256) {
         // USDC --> WETH
-        uint256 _amountOut = TRICRYPTO.exchange(
+        return TRICRYPTO.exchange(
             USDC_INDEX_USDC_WETH_POOL,
             WETH_INDEX_USDC_WETH_POOL,
             _amount,
@@ -104,25 +66,14 @@ contract WETHToUSDCExchange is IExchange {
             false, // use_eth
             msg.sender // receiver
         );
-
-        require(_amountOut >= _minAmount, "slippage rekt you");
-
-        return _amountOut;
     }
 
-    /// @notice Swaps from the collateral token to the borrow token
-    /// @param _amount Amount of collateral tokens to swap
-    /// @param _minAmount Minimum amount of borrow tokens to receive
-    /// @return Amount of borrow tokens received
+    /// @inheritdoc BaseExchange
     function _swapTo(
-        uint256 _amount,
-        uint256 _minAmount
-    ) internal returns (uint256) {
-        // Pull WETH
-        WETH.safeTransferFrom(msg.sender, address(this), _amount);
-
+        uint256 _amount
+    ) internal override returns (uint256) {
         // WETH --> USDC
-        uint256 _amountOut = TRICRYPTO.exchange(
+        return TRICRYPTO.exchange(
             WETH_INDEX_USDC_WETH_POOL,
             USDC_INDEX_USDC_WETH_POOL,
             _amount,
@@ -130,10 +81,6 @@ contract WETHToUSDCExchange is IExchange {
             false, // use_eth
             msg.sender // receiver
         );
-
-        require(_amountOut >= _minAmount, "slippage rekt you");
-
-        return _amountOut;
     }
 
 }
