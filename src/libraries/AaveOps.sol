@@ -92,7 +92,7 @@ library AaveOps {
         if (_supplyCap == 0) return type(uint256).max;
 
         uint256 _scaledSupplyCap = _supplyCap * 10 ** ERC20(_asset).decimals();
-        uint256 _currentSupply = _aToken.totalSupply() + ERC20(_asset).balanceOf(address(this));
+        uint256 _currentSupply = _aToken.totalSupply();
         if (_scaledSupplyCap <= _currentSupply) return 0;
 
         return _scaledSupplyCap - _currentSupply;
