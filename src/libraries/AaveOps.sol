@@ -7,7 +7,7 @@ import {IPool} from "@aave-v3/interfaces/IPool.sol";
 import {IAToken} from "@aave-v3/interfaces/IAToken.sol";
 import {IPoolDataProvider} from "@aave-v3/interfaces/IPoolDataProvider.sol";
 import {IPriceOracleSentinel} from "@aave-v3/interfaces/IPriceOracleSentinel.sol";
-import {DataTypes} from "@aave-v3/protocol/libraries/types/DataTypes.sol";
+import {IRewardsController} from "@aave-v3/rewards/interfaces/IRewardsController.sol";
 
 library AaveOps {
 
@@ -183,6 +183,21 @@ library AaveOps {
         uint256 _amount
     ) external {
         if (_amount > 0) _pool.repay(_borrowToken, _amount, INTEREST_RATE_MODE, address(this));
+    }
+
+    /// @notice Claims all Aave rewards for the given aToken and debt token
+    /// @param _rewardsController The AAVE rewards controller
+    /// @param _aToken The aToken address
+    /// @param _debtToken The variable debt token address
+    function claimRewards(
+        IRewardsController _rewardsController,
+        address _aToken,
+        address _debtToken
+    ) external {
+        address[] memory assets = new address[](2);
+        assets[0] = _aToken;
+        assets[1] = _debtToken;
+        _rewardsController.claimAllRewardsToSelf(assets);
     }
 
 }

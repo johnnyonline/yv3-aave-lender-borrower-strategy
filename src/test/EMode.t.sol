@@ -4,7 +4,7 @@ pragma solidity ^0.8.18;
 import "forge-std/console2.sol";
 import {Test} from "forge-std/Test.sol";
 
-import {WBTCToLBTCExchange as Exchange} from "../periphery/WBTCToLBTCExchange.sol";
+import {Exchange} from "../periphery/Exchange.sol";
 import {AaveLenderBorrowerStrategy as Strategy, ERC20, IPool} from "../Strategy.sol";
 import {StrategyFactory} from "../StrategyFactory.sol";
 import {IStrategyInterface} from "../interfaces/IStrategyInterface.sol";
@@ -27,7 +27,33 @@ contract EModeTest is Test {
 
         StrategyFactory factory = new StrategyFactory(management, address(3), address(4), address(5));
 
-        Exchange exchange = new Exchange();
+        address WBTC = 0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599;
+        address CURVE_POOL = 0x2f3bC4c27A4437AeCA13dE0e37cdf1028f3706F0;
+
+        Exchange exchange = new Exchange(management, WBTC, LBTC);
+
+        // WBTC -> LBTC
+        address[11] memory _fromRoute;
+        _fromRoute[0] = WBTC;
+        _fromRoute[1] = CURVE_POOL;
+        _fromRoute[2] = LBTC;
+        uint256[5][5] memory _fromParams;
+        _fromParams[0] = [uint256(1), 0, 1, 2, 2]; // i=1 (WBTC), j=0 (LBTC), swap_type=1, pool_type=2 (crypto), n_coins=2
+
+        // LBTC -> WBTC
+        address[11] memory _toRoute;
+        _toRoute[0] = LBTC;
+        _toRoute[1] = CURVE_POOL;
+        _toRoute[2] = WBTC;
+        uint256[5][5] memory _toParams;
+        _toParams[0] = [uint256(0), 1, 1, 2, 2]; // i=0 (LBTC), j=1 (WBTC)
+
+        address[5] memory _pools;
+
+        vm.startPrank(management);
+        exchange.setCurveRoute(WBTC, LBTC, _fromRoute, _fromParams, _pools);
+        exchange.setCurveRoute(LBTC, WBTC, _toRoute, _toParams, _pools);
+        vm.stopPrank();
 
         strategy = IStrategyInterface(
             factory.newStrategy(

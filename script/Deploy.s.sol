@@ -8,7 +8,7 @@ import {ICentralAprOracle} from "../src/interfaces/ICentralAprOracle.sol";
 import {IExchange} from "../src/interfaces/IExchange.sol";
 
 import {StrategyAprOracle} from "../src/periphery/StrategyAprOracle.sol";
-import {WBTCToUSDCExchange as Exchange} from "../src/periphery/WBTCToUSDCExchange.sol";
+import {Exchange} from "../src/periphery/Exchange.sol";
 
 import {AaveLenderBorrowerStrategy as Strategy} from "../src/Strategy.sol";
 
@@ -24,6 +24,7 @@ contract Deploy is Script {
     address public constant DEPLOYER = 0x285E3b1E82f74A99D07D2aD25e159E75382bB43B; // johnnyonline.eth
 
     address public constant WBTC = 0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599;
+    address public constant USDC = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
     address public constant LENDER_VAULT = 0x696d02Db93291651ED510704c9b286841d506987; // yvUSD
     address public constant ADDRESS_PROVIDER = 0x2f39d218133AFaB8F2B819B1066c7E434Ad94E9e;
     address public constant YHAAS = 0x604e586F17cE106B64185A7a0d2c1Da5bAce711E; // yHAAS
@@ -40,7 +41,7 @@ contract Deploy is Script {
         vm.startBroadcast(_pk);
 
         // deploy
-        address _exchange = address(new Exchange());
+        address _exchange = address(new Exchange(SMS, USDC, WBTC));
         address _aprOracle = address(new StrategyAprOracle());
         address _strategy = address(new Strategy(WBTC, _name, LENDER_VAULT, ADDRESS_PROVIDER, _exchange, uint8(0)));
 

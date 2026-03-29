@@ -28,9 +28,6 @@ contract AaveLenderBorrowerStrategy is BaseLenderBorrower {
     ///         which means we'll always consider it profitable to borrow
     bool public forceLeverage;
 
-    /// @notice Addresses allowed to deposit
-    mapping(address => bool) public allowed;
-
     // ===============================================================
     // Constants
     // ===============================================================
@@ -145,23 +142,10 @@ contract AaveLenderBorrowerStrategy is BaseLenderBorrower {
         forceLeverage = _forceLeverage;
     }
 
-    /// @notice Allow (or disallow) a specific address to deposit into the strategy
-    /// @param _address Address to allow or disallow
-    /// @param _allowed True to allow deposits from `_address`, false to block
-    function setAllowed(
-        address _address,
-        bool _allowed
-    ) external onlyManagement {
-        allowed[_address] = _allowed;
-    }
-
     /// @notice Claim all Aave rewards to this contract
     /// @dev After claiming, rewards will need to be swept manually using the `sweep()` function
     function claimRewards() external onlyManagement {
-        address[] memory assets = new address[](2);
-        assets[0] = address(A_TOKEN);
-        assets[1] = address(DEBT_TOKEN);
-        REWARDS_CONTROLLER.claimAllRewardsToSelf(assets);
+        AaveOps.claimRewards(REWARDS_CONTROLLER, address(A_TOKEN), address(DEBT_TOKEN));
     }
 
     /// @notice Sweep stuck tokens to management

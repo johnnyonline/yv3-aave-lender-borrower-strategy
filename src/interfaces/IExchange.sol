@@ -5,7 +5,6 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 interface IExchange {
 
-    function SMS() external view returns (address);
     function BORROW() external view returns (address);
     function COLLATERAL() external view returns (address);
     function swap(

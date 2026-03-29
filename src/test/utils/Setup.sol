@@ -4,7 +4,7 @@ pragma solidity ^0.8.18;
 import "forge-std/console2.sol";
 import {Test} from "forge-std/Test.sol";
 
-import {WETHToUSDCExchange as Exchange} from "../../periphery/WETHToUSDCExchange.sol";
+import {Exchange} from "../../periphery/Exchange.sol";
 import {
     AaveLenderBorrowerStrategy as Strategy,
     ERC20,
@@ -98,7 +98,7 @@ contract Setup is Test, IEvents {
     }
 
     function setUpStrategy() public returns (address) {
-        exchange = new Exchange();
+        exchange = _deployExchange();
 
         // we save the strategy as a IStrategyInterface to give it the needed interface
         IStrategyInterface _strategy = IStrategyInterface(
@@ -120,6 +120,39 @@ contract Setup is Test, IEvents {
         vm.stopPrank();
 
         return address(_strategy);
+    }
+
+    function _deployExchange() internal returns (IExchange) {
+        address USDC = tokenAddrs["USDC"];
+        address WETH = tokenAddrs["WETH"];
+        address TRICRYPTO = 0x7F86Bf177Dd4F3494b841a37e810A34dD56c829B;
+
+        Exchange _exchange = new Exchange(management, USDC, WETH);
+
+        // USDC -> WETH
+        address[11] memory _fromRoute;
+        _fromRoute[0] = USDC;
+        _fromRoute[1] = TRICRYPTO;
+        _fromRoute[2] = WETH;
+        uint256[5][5] memory _fromParams;
+        _fromParams[0] = [uint256(0), 2, 1, 3, 3];
+
+        // WETH -> USDC
+        address[11] memory _toRoute;
+        _toRoute[0] = WETH;
+        _toRoute[1] = TRICRYPTO;
+        _toRoute[2] = USDC;
+        uint256[5][5] memory _toParams;
+        _toParams[0] = [uint256(2), 0, 1, 3, 3];
+
+        address[5] memory _pools;
+
+        vm.startPrank(management);
+        _exchange.setCurveRoute(USDC, WETH, _fromRoute, _fromParams, _pools);
+        _exchange.setCurveRoute(WETH, USDC, _toRoute, _toParams, _pools);
+        vm.stopPrank();
+
+        return IExchange(address(_exchange));
     }
 
     function depositIntoStrategy(
