@@ -116,6 +116,6 @@ contract Deploy is Script {
 // Strategy address: 0x0851eedf2A2EA59a5CB688FCC4697d624fcc0576
 
 // usdc/yvbtc
-// Exchange address: 0xf46cbBCBE2b8D4dfB19c44652C1d015De1333C02
-// Oracle address: 0xf7D9499a3F2FF64F56f672568de6865DAb709f83
-// Strategy address: 0x4B50Da7a11d15F232378b1B35EAc1F1952C3aB7f
+// Exchange address: 0xEbb2908D09eCf29924CfB0dFa28687491EcdEaF0
+// Oracle address: 0xb45aCcC94E57D87C3Be125FF038350c46FB8802a
+// Strategy address: 0x27C176Dc285c88201D224c57E537E6aF2fFF022A
