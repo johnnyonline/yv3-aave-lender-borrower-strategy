@@ -419,9 +419,11 @@ contract OperationTest is Setup {
         (bool trigger,) = strategy.tendTrigger();
         assertFalse(trigger, "sellRewards");
 
-        // Set health check to accept loss
-        vm.prank(management);
+        // Set health check to accept loss and high slippage for post-liquidation swap
+        vm.startPrank(management);
         strategy.setLossLimitRatio(5_000); // 50% loss
+        strategy.setSlippage(6_000); // 60% slippage bc of oracle price manipulation
+        vm.stopPrank();
 
         // Sell lent assets we still have and report loss
         vm.prank(keeper);

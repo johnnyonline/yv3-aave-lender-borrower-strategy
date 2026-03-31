@@ -303,7 +303,7 @@ contract AaveLenderBorrowerStrategy is BaseLenderBorrower {
             borrowToken,
             address(asset),
             _amount,
-            0 // minAmountOut
+            _getAmountOut(_amount, borrowToken, address(asset))
         );
     }
 
@@ -324,7 +324,7 @@ contract AaveLenderBorrowerStrategy is BaseLenderBorrower {
             address(asset),
             borrowToken,
             _amount,
-            0 // minAmountOut
+            _getAmountOut(_amount, address(asset), borrowToken)
         );
     }
 
