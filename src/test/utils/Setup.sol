@@ -127,7 +127,7 @@ contract Setup is Test, IEvents {
         address WETH = tokenAddrs["WETH"];
         address TRICRYPTO = 0x7F86Bf177Dd4F3494b841a37e810A34dD56c829B;
 
-        Exchange _exchange = new Exchange(management, USDC, WETH);
+        Exchange _exchange = new Exchange(management);
 
         // USDC -> WETH
         address[11] memory _fromRoute;

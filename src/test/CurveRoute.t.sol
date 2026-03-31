@@ -24,7 +24,7 @@ contract CurveRouteTest is Test {
     function setUp() public {
         vm.selectFork(vm.createFork(vm.envString("ETH_RPC_URL"), 24_570_258));
 
-        exchange = new Exchange(management, USDC, cbBTC);
+        exchange = new Exchange(management);
 
         // USDC -> cbBTC (2 hops: USDC -> WBTC via tricrypto, WBTC -> cbBTC via cbBTC/WBTC)
         address[11] memory _fromRoute;
@@ -62,7 +62,7 @@ contract CurveRouteTest is Test {
 
         vm.startPrank(user);
         ERC20(USDC).approve(address(exchange), _amount);
-        uint256 _out = exchange.swap(_amount, 0, true);
+        uint256 _out = exchange.exchange(USDC, cbBTC, _amount, 0);
         vm.stopPrank();
 
         console2.log("USDC in:", _amount);
@@ -78,7 +78,7 @@ contract CurveRouteTest is Test {
 
         vm.startPrank(user);
         ERC20(cbBTC).approve(address(exchange), _amount);
-        uint256 _out = exchange.swap(_amount, 0, false);
+        uint256 _out = exchange.exchange(cbBTC, USDC, _amount, 0);
         vm.stopPrank();
 
         console2.log("cbBTC in:", _amount);

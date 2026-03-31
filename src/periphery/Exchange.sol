@@ -13,28 +13,13 @@ contract Exchange is IExchange, CurveSwapper, Ownable2Step {
     using SafeERC20 for IERC20;
 
     // ===============================================================
-    // Constants
-    // ===============================================================
-
-    /// @notice Address of the borrow token
-    address public immutable BORROW;
-
-    /// @notice Address of the collateral token
-    address public immutable COLLATERAL;
-
-    // ===============================================================
     // Constructor
     // ===============================================================
 
     constructor(
-        address _owner,
-        address _borrow,
-        address _collateral
+        address _owner
     ) {
         _transferOwnership(_owner);
-
-        BORROW = _borrow;
-        COLLATERAL = _collateral;
     }
 
     // ===============================================================
@@ -88,53 +73,29 @@ contract Exchange is IExchange, CurveSwapper, Ownable2Step {
     // Mutative functions
     // ============================================================================================
 
-    /// @notice Swaps between borrow token and the collateral token
-    /// @param _amount Amount of tokens to swap
-    /// @param _minAmount Minimum amount of tokens to receive
-    /// @param _fromBorrow If true, swap from borrow token to collateral token, false otherwise
-    /// @return Amount of tokens received
-    function swap(
-        uint256 _amount,
-        uint256 _minAmount,
-        bool _fromBorrow
-    ) external override returns (uint256) {
+    /// @notice Swaps between two tokens
+    /// @param _from The input token address
+    /// @param _to The output token address
+    /// @param _amountIn Amount of input tokens
+    /// @param _amountOutMin Minimum amount of output tokens
+    /// @return _amountOut Amount of output tokens received
+    function exchange(
+        address _from,
+        address _to,
+        uint256 _amountIn,
+        uint256 _amountOutMin
+    ) external override returns (uint256 _amountOut) {
         // Pull input token from caller
-        IERC20(_fromBorrow ? BORROW : COLLATERAL).safeTransferFrom(msg.sender, address(this), _amount);
+        IERC20(_from).safeTransferFrom(msg.sender, address(this), _amountIn);
 
         // Execute the swap
-        uint256 _amountOut = _fromBorrow ? _swapFrom(_amount) : _swapTo(_amount);
+        _amountOut = _curveSwapFrom(_from, _to, _amountIn, 0);
 
         // Slippage check
-        require(_amountOut >= _minAmount, "slippage rekt you");
+        require(_amountOut >= _amountOutMin, "slippage rekt you");
 
         // Transfer output to caller
-        IERC20(_fromBorrow ? COLLATERAL : BORROW).safeTransfer(msg.sender, _amountOut);
-
-        return _amountOut;
-    }
-
-    // ============================================================================================
-    // Internal functions
-    // ============================================================================================
-
-    /// @notice Swaps from the borrow token to the collateral token
-    /// @dev Input token is already pulled. Only perform the raw swap.
-    /// @param _amount Amount of borrow tokens to swap
-    /// @return Amount of collateral tokens received
-    function _swapFrom(
-        uint256 _amount
-    ) internal virtual returns (uint256) {
-        return _curveSwapFrom(BORROW, COLLATERAL, _amount, 0);
-    }
-
-    /// @notice Swaps from the collateral token to the borrow token
-    /// @dev Input token is already pulled. Only perform the raw swap.
-    /// @param _amount Amount of collateral tokens to swap
-    /// @return Amount of borrow tokens received
-    function _swapTo(
-        uint256 _amount
-    ) internal virtual returns (uint256) {
-        return _curveSwapFrom(COLLATERAL, BORROW, _amount, 0);
+        IERC20(_to).safeTransfer(msg.sender, _amountOut);
     }
 
 }

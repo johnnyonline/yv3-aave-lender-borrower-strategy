@@ -30,7 +30,7 @@ contract EModeTest is Test {
         address WBTC = 0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599;
         address CURVE_POOL = 0x2f3bC4c27A4437AeCA13dE0e37cdf1028f3706F0;
 
-        Exchange exchange = new Exchange(management, WBTC, LBTC);
+        Exchange exchange = new Exchange(management);
 
         // WBTC -> LBTC
         address[11] memory _fromRoute;

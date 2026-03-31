@@ -15,8 +15,6 @@ contract ExchangeTest is Setup {
     }
 
     function test_setupOK() public {
-        assertEq(exchange.BORROW(), strategy.borrowToken());
-        assertEq(exchange.COLLATERAL(), strategy.asset());
         assertEq(_exchange.owner(), management);
     }
 
@@ -25,27 +23,30 @@ contract ExchangeTest is Setup {
     ) public {
         vm.assume(_amount > minFuzzAmount && _amount < maxFuzzAmount);
 
-        if (ERC20(exchange.BORROW()).decimals() < 18) _amount /= 1e12;
+        address _borrow = strategy.borrowToken();
+        address _collateral = strategy.asset();
 
-        airdrop(ERC20(exchange.BORROW()), user, _amount);
+        if (ERC20(_borrow).decimals() < 18) _amount /= 1e12;
 
-        uint256 _balanceBeforeToken = ERC20(exchange.BORROW()).balanceOf(user);
-        uint256 _balanceBeforePairedWith = ERC20(exchange.COLLATERAL()).balanceOf(user);
+        airdrop(ERC20(_borrow), user, _amount);
+
+        uint256 _balanceBeforeBorrow = ERC20(_borrow).balanceOf(user);
+        uint256 _balanceBeforeCollateral = ERC20(_collateral).balanceOf(user);
 
         vm.startPrank(user);
-        ERC20(exchange.BORROW()).approve(address(exchange), _amount);
+        ERC20(_borrow).approve(address(exchange), _amount);
         vm.expectRevert("slippage rekt you");
-        exchange.swap(_amount, type(uint256).max, true);
-        uint256 _amountOut = exchange.swap(_amount, 0, true);
+        exchange.exchange(_borrow, _collateral, _amount, type(uint256).max);
+        uint256 _amountOut = exchange.exchange(_borrow, _collateral, _amount, 0);
         vm.stopPrank();
 
         // Check user balances
-        assertEq(ERC20(exchange.BORROW()).balanceOf(user), _balanceBeforeToken - _amount);
-        assertEq(ERC20(exchange.COLLATERAL()).balanceOf(user), _balanceBeforePairedWith + _amountOut);
+        assertEq(ERC20(_borrow).balanceOf(user), _balanceBeforeBorrow - _amount);
+        assertEq(ERC20(_collateral).balanceOf(user), _balanceBeforeCollateral + _amountOut);
 
         // Check exchange balances
-        assertEq(ERC20(exchange.BORROW()).balanceOf(address(exchange)), 0);
-        assertEq(ERC20(exchange.COLLATERAL()).balanceOf(address(exchange)), 0);
+        assertEq(ERC20(_borrow).balanceOf(address(exchange)), 0);
+        assertEq(ERC20(_collateral).balanceOf(address(exchange)), 0);
     }
 
     function test_swapTo(
@@ -53,25 +54,28 @@ contract ExchangeTest is Setup {
     ) public {
         vm.assume(_amount > minFuzzAmount && _amount < maxFuzzAmount);
 
-        airdrop(ERC20(exchange.COLLATERAL()), user, _amount);
+        address _borrow = strategy.borrowToken();
+        address _collateral = strategy.asset();
 
-        uint256 _balanceBeforeToken = ERC20(exchange.BORROW()).balanceOf(user);
-        uint256 _balanceBeforePairedWith = ERC20(exchange.COLLATERAL()).balanceOf(user);
+        airdrop(ERC20(_collateral), user, _amount);
+
+        uint256 _balanceBeforeBorrow = ERC20(_borrow).balanceOf(user);
+        uint256 _balanceBeforeCollateral = ERC20(_collateral).balanceOf(user);
 
         vm.startPrank(user);
-        ERC20(exchange.COLLATERAL()).approve(address(exchange), _amount);
+        ERC20(_collateral).approve(address(exchange), _amount);
         vm.expectRevert("slippage rekt you");
-        exchange.swap(_amount, type(uint256).max, false);
-        uint256 _amountOut = exchange.swap(_amount, 0, false);
+        exchange.exchange(_collateral, _borrow, _amount, type(uint256).max);
+        uint256 _amountOut = exchange.exchange(_collateral, _borrow, _amount, 0);
         vm.stopPrank();
 
         // Check user balances
-        assertEq(ERC20(exchange.COLLATERAL()).balanceOf(user), _balanceBeforePairedWith - _amount);
-        assertEq(ERC20(exchange.BORROW()).balanceOf(user), _balanceBeforeToken + _amountOut);
+        assertEq(ERC20(_collateral).balanceOf(user), _balanceBeforeCollateral - _amount);
+        assertEq(ERC20(_borrow).balanceOf(user), _balanceBeforeBorrow + _amountOut);
 
         // Check exchange balances
-        assertEq(ERC20(exchange.BORROW()).balanceOf(address(exchange)), 0);
-        assertEq(ERC20(exchange.COLLATERAL()).balanceOf(address(exchange)), 0);
+        assertEq(ERC20(_borrow).balanceOf(address(exchange)), 0);
+        assertEq(ERC20(_collateral).balanceOf(address(exchange)), 0);
     }
 
     // ============================================================
@@ -135,19 +139,21 @@ contract ExchangeTest is Setup {
     ) public {
         vm.assume(_amount > minFuzzAmount && _amount < maxFuzzAmount);
 
-        airdrop(ERC20(exchange.BORROW()), address(exchange), _amount);
-        uint256 _balanceBefore = ERC20(exchange.BORROW()).balanceOf(management);
+        ERC20 _borrow = ERC20(strategy.borrowToken());
+
+        airdrop(_borrow, address(exchange), _amount);
+        uint256 _balanceBefore = _borrow.balanceOf(management);
 
         vm.startPrank(management);
-        exchange.sweep(ERC20(exchange.BORROW()));
+        exchange.sweep(_borrow);
 
         vm.expectRevert("!balance");
         exchange.sweep(ERC20(tokenAddrs["YFI"]));
 
         vm.stopPrank();
 
-        assertEq(ERC20(exchange.BORROW()).balanceOf(management), _balanceBefore + _amount);
-        assertEq(ERC20(exchange.BORROW()).balanceOf(address(exchange)), 0);
+        assertEq(_borrow.balanceOf(management), _balanceBefore + _amount);
+        assertEq(_borrow.balanceOf(address(exchange)), 0);
     }
 
     function test_sweep_wrongCaller(
@@ -155,7 +161,7 @@ contract ExchangeTest is Setup {
     ) public {
         vm.assume(_wrongCaller != management);
 
-        ERC20 token = ERC20(exchange.BORROW());
+        ERC20 token = ERC20(strategy.borrowToken());
 
         airdrop(token, address(exchange), 1e18);
 

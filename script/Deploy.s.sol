@@ -43,7 +43,7 @@ contract Deploy is Script {
         vm.startBroadcast(_pk);
 
         // deploy
-        address _exchange = address(new Exchange(DEPLOYER, CBBTC, USDC));
+        address _exchange = address(new Exchange(DEPLOYER));
         address _aprOracle = address(new StrategyAprOracle());
         address _strategy = address(new Strategy(USDC, _name, LENDER_VAULT, ADDRESS_PROVIDER, _exchange, uint8(0)));
 

@@ -100,7 +100,6 @@ contract AaveLenderBorrowerStrategy is BaseLenderBorrower {
         require(!_isBorrowPaused(), "borrowPaused");
 
         EXCHANGE = IExchange(_exchange);
-        require(EXCHANGE.BORROW() == borrowToken && EXCHANGE.COLLATERAL() == _asset, "!exchange");
 
         if (_categoryId != 0) {
             uint16 _borrowId = POOL.getReserveData(borrowToken).id;
@@ -300,10 +299,11 @@ contract AaveLenderBorrowerStrategy is BaseLenderBorrower {
         uint256 _amount
     ) internal virtual override {
         if (_amount == 0) return;
-        EXCHANGE.swap(
+        EXCHANGE.exchange(
+            borrowToken,
+            address(asset),
             _amount,
-            0, // minAmount
-            true // fromBorrow
+            0 // minAmountOut
         );
     }
 
@@ -320,10 +320,11 @@ contract AaveLenderBorrowerStrategy is BaseLenderBorrower {
         uint256 _amount
     ) internal {
         if (_amount == 0) return;
-        EXCHANGE.swap(
+        EXCHANGE.exchange(
+            address(asset),
+            borrowToken,
             _amount,
-            0, // minAmount
-            false // fromBorrow
+            0 // minAmountOut
         );
     }
 
