@@ -299,12 +299,7 @@ contract AaveLenderBorrowerStrategy is BaseLenderBorrower {
         uint256 _amount
     ) internal virtual override {
         if (_amount == 0) return;
-        EXCHANGE.exchange(
-            borrowToken,
-            address(asset),
-            _amount,
-            _getAmountOut(_amount, borrowToken, address(asset))
-        );
+        EXCHANGE.exchange(borrowToken, address(asset), _amount, _getAmountOut(_amount, borrowToken, address(asset)));
     }
 
     /// @inheritdoc BaseLenderBorrower
@@ -320,12 +315,7 @@ contract AaveLenderBorrowerStrategy is BaseLenderBorrower {
         uint256 _amount
     ) internal {
         if (_amount == 0) return;
-        EXCHANGE.exchange(
-            address(asset),
-            borrowToken,
-            _amount,
-            _getAmountOut(_amount, address(asset), borrowToken)
-        );
+        EXCHANGE.exchange(address(asset), borrowToken, _amount, _getAmountOut(_amount, address(asset), borrowToken));
     }
 
 }
