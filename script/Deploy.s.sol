@@ -22,6 +22,7 @@ contract Deploy is Script {
     address public constant SMS = 0x16388463d60FFE0661Cf7F1f31a7D658aC790ff7; // SMS mainnet
     address public constant ACCOUNTANT = 0x5A74Cb32D36f2f517DB6f7b0A0591e09b22cDE69; // SMS mainnet accountant
     address public constant DEPLOYER = 0x420ACF637D662b80cca8bEfb327AA24039E7e0Fa; // gm.johnnyonline.eth
+    address public constant YHAAS = 0x604e586F17cE106B64185A7a0d2c1Da5bAce711E;
 
     address public constant WBTC = 0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599;
     address public constant USDC = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
@@ -29,61 +30,95 @@ contract Deploy is Script {
     address public constant CBBTC = 0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf;
     address public constant PYUSD = 0x6c3ea9036406852006290770BEdFcAbA0e23A0e8;
     address public constant RLUSD = 0x8292Bb45bf1Ee4d140127049757C2E0fF06317eD;
+    address public constant WSTETH = 0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0;
 
-    // address public constant LENDER_VAULT = 0x696d02Db93291651ED510704c9b286841d506987; // yvUSD
-    // address public constant LENDER_VAULT = 0xb8787E236e699654F910CAD14F338d0DdB529Fd7; // yvBTC
-    // address public constant LENDER_VAULT = 0x68E2B0A30F0c470bC4Bdc80bB9A308b0187Ca610; // pyUSD
-    // address public constant LENDER_VAULT = 0x5933b3972abD1CAcc7F6a6D5a24256a17f5c8289; // rlUSD
-    address public constant LENDER_VAULT = 0xA0e0B2F2F28A7A9CB16F307582B247240BAc6db0; // USDT
     address public constant ADDRESS_PROVIDER = 0x2f39d218133AFaB8F2B819B1066c7E434Ad94E9e;
-    address public constant YHAAS = 0x604e586F17cE106B64185A7a0d2c1Da5bAce711E; // yHAAS
     address public constant STRATEGY_APR_ORACLE = 0x804916A943A01E2E82304C1C0E743eAeF63D2FFd;
+    address public constant EXCHANGE = 0xEbb2908D09eCf29924CfB0dFa28687491EcdEaF0;
 
     ICentralAprOracle public constant APR_ORACLE = ICentralAprOracle(0x1981AD9F44F2EA9aDd2dC4AD7D075c102C70aF92);
+
+    struct StrategyConfig {
+        address asset;
+        address lenderVault;
+        string name;
+        function(address) internal setRoute;
+    }
 
     function run() public {
         uint256 _pk = vm.envUint("DEPLOYER_PRIVATE_KEY");
         address _deployer = vm.addr(_pk);
         require(_deployer == DEPLOYER, "!deployer");
 
-        string memory _name = "Aave v3 cbBTC/ysUSDT Lender Borrower";
-
         vm.startBroadcast(_pk);
 
-        // deploy
-        address _exchange = address(new Exchange(DEPLOYER));
-        // address _aprOracle = address(new StrategyAprOracle());
+        // Deploy shared periphery
+        address _exchange = EXCHANGE;
         address _aprOracle = STRATEGY_APR_ORACLE;
-        address _strategy = address(new Strategy(CBBTC, _name, LENDER_VAULT, ADDRESS_PROVIDER, _exchange, uint8(0)));
+
+        address _lender = 0xb8787E236e699654F910CAD14F338d0DdB529Fd7; // yvBTC
+        address _strategy = address(
+            new Strategy(USDC, "Aave v3 USDC/yvBTC Lender Borrower", _lender, ADDRESS_PROVIDER, _exchange, uint8(0))
+        );
 
         IStrategyInterface strategy_ = IStrategyInterface(_strategy);
-
-        // init
         strategy_.setPerformanceFeeRecipient(ACCOUNTANT);
         strategy_.setKeeper(YHAAS);
         strategy_.setPendingManagement(SMS);
         strategy_.setEmergencyAdmin(SMS);
-
-        // force leverage
         strategy_.setForceLeverage(true);
 
-        // set APR oracle
         APR_ORACLE.setOracle(_strategy, _aprOracle);
 
-        // set exchange routes
+        console.log("Strategy [%s]: %s", "Aave v3 USDC/yvBTC Lender Borrower", _strategy);
+
+        // // Set all exchange routes
         // _setUsdcCbbtcRoute(_exchange);
         // _setPyusdCbbtcRoute(_exchange);
         // _setRlusdCbbtcRoute(_exchange);
-        _setUsdtCbbtcRoute(_exchange);
+        // _setUsdtCbbtcRoute(_exchange);
 
-        // transfer exchange ownership to SMS
-        Exchange(_exchange).transferOwnership(SMS);
+        // // Transfer exchange ownership to SMS
+        // Exchange(_exchange).transferOwnership(SMS);
+
+        // // Deploy all strategies
+        // address[4] memory _assets = [USDC, PYUSD, RLUSD, USDT];
+        // address[4] memory _vaults = [
+        //     0x696d02Db93291651ED510704c9b286841d506987, // yvUSD
+        //     0x68E2B0A30F0c470bC4Bdc80bB9A308b0187Ca610, // ysPYUSD
+        //     0x5933b3972abD1CAcc7F6a6D5a24256a17f5c8289, // ysRLUSD
+        //     0xA0e0B2F2F28A7A9CB16F307582B247240BAc6db0  // ysUSDT
+        // ];
+
+        // for (uint256 i = 0; i < _assets.length; i++) {
+        //     address _strategy = address(
+        //         new Strategy(CBBTC, _strategyName(_assets[i]), _vaults[i], ADDRESS_PROVIDER, _exchange, uint8(0))
+        //     );
+
+        //     IStrategyInterface strategy_ = IStrategyInterface(_strategy);
+        //     strategy_.setPerformanceFeeRecipient(ACCOUNTANT);
+        //     strategy_.setKeeper(YHAAS);
+        //     strategy_.setPendingManagement(SMS);
+        //     strategy_.setEmergencyAdmin(SMS);
+        //     strategy_.setForceLeverage(true);
+
+        //     APR_ORACLE.setOracle(_strategy, _aprOracle);
+
+        //     console.log("Strategy [%s]: %s", _strategyName(_assets[i]), _strategy);
+        // }
+
+        console.log("Exchange: %s", _exchange);
+        console.log("Oracle: %s", _aprOracle);
 
         vm.stopBroadcast();
+    }
 
-        console.log("Exchange address: %s", _exchange);
-        console.log("Oracle address: %s", _aprOracle);
-        console.log("Strategy address: %s", _strategy);
+    function _strategyName(address _borrowToken) internal pure returns (string memory) {
+        if (_borrowToken == USDC) return "Aave v3 cbBTC/yvUSD Lender Borrower";
+        if (_borrowToken == PYUSD) return "Aave v3 cbBTC/ysPYUSD Lender Borrower";
+        if (_borrowToken == RLUSD) return "Aave v3 cbBTC/ysRLUSD Lender Borrower";
+        if (_borrowToken == USDT) return "Aave v3 cbBTC/ysUSDT Lender Borrower";
+        revert("unknown token");
     }
 
     function _setUsdcCbbtcRoute(
@@ -236,29 +271,46 @@ contract Deploy is Script {
         Exchange(_exchange).setCurveRoute(CBBTC, USDT, _toRoute, _toParams, _pools);
     }
 
+    function _setUsdcWstethRoute(
+        address _exchange
+    ) internal {
+        address _crvusdUsdc = 0x4DEcE678ceceb27446b35C672dC7d61F30bAD69E;
+        address _tricryptollama = 0x2889302a794dA87fBF1D6Db415C1492194663D13;
+
+        // USDC -> wstETH (USDC -> crvUSD via crvUSD/USDC, crvUSD -> wstETH via tricryptollama)
+        address[11] memory _fromRoute;
+        _fromRoute[0] = USDC;
+        _fromRoute[1] = _crvusdUsdc;
+        _fromRoute[2] = 0xf939E0A03FB07F59A73314E73794Be0E57ac1b4E; // crvUSD
+        _fromRoute[3] = _tricryptollama;
+        _fromRoute[4] = WSTETH;
+        uint256[5][5] memory _fromParams;
+        _fromParams[0] = [uint256(0), 1, 1, 1, 2]; // USDC(0) -> crvUSD(1), stableswap
+        _fromParams[1] = [uint256(0), 2, 1, 3, 3]; // crvUSD(0) -> wstETH(2), tricrypto
+
+        // wstETH -> USDC (wstETH -> crvUSD via tricryptollama, crvUSD -> USDC via crvUSD/USDC)
+        address[11] memory _toRoute;
+        _toRoute[0] = WSTETH;
+        _toRoute[1] = _tricryptollama;
+        _toRoute[2] = 0xf939E0A03FB07F59A73314E73794Be0E57ac1b4E; // crvUSD
+        _toRoute[3] = _crvusdUsdc;
+        _toRoute[4] = USDC;
+        uint256[5][5] memory _toParams;
+        _toParams[0] = [uint256(2), 0, 1, 3, 3]; // wstETH(2) -> crvUSD(0), tricrypto
+        _toParams[1] = [uint256(1), 0, 1, 1, 2]; // crvUSD(1) -> USDC(0), stableswap
+
+        address[5] memory _pools;
+
+        Exchange(_exchange).setCurveRoute(USDC, WSTETH, _fromRoute, _fromParams, _pools);
+        Exchange(_exchange).setCurveRoute(WSTETH, USDC, _toRoute, _toParams, _pools);
+    }
+
 }
 
-// usdc/yvbtc
-// Exchange address: 0x526b1D550c6ebC7F37528d04c1D55727d36Fcbf6
-// Oracle address: 0x804916A943A01E2E82304C1C0E743eAeF63D2FFd
-// Strategy address: 0xd83140cC14B0322ECaBab27D3cb6565cfea92972
-
-// cbbtc/yvusd
-// Exchange address: 0x1a6ABa508d32D27AA11caa744d2E297BC1684b68
-// Oracle address: 0x804916A943A01E2E82304C1C0E743eAeF63D2FFd
-// Strategy address: 0x1Ac0782d5A13549B9dd6519Bd2EBFBFdFaCb574a
-
-// cbbtc/yspyusd
-// Exchange address: 0x4E58891961693D19dC8ea1767179EdaEFA45935b
-// Oracle address: 0x804916A943A01E2E82304C1C0E743eAeF63D2FFd
-// Strategy address: 0x8eb033F6C45656C2f5Af610e42c1C75622f4856B
-
-// cbbtc/ysrlusd
-// Exchange address: 0xE2CFFb25bCDFCd28F940B6c0a3AC1A90735D2A73
-// Oracle address: 0x804916A943A01E2E82304C1C0E743eAeF63D2FFd
-// Strategy address: 0x6d1Fcdc4A00b5C9f821D937c6d1Dda857E958be2
-
-// cbbtc/ysusdt
-// Exchange address: 0x85e5AcB31EA53ac93F6dAd92BCcE1c18f8edA48D
-// Oracle address: 0x804916A943A01E2E82304C1C0E743eAeF63D2FFd
-// Strategy address: 0xc9d16A3f27528db30879bbaA7c364B26A5E1B8C7
+// Strategy [Aave v3 USDC/yvBTC Lender Borrower]: 0x52A52d224573fCBDD6e8353cE1D0591563Fc3Bb4
+// Strategy [Aave v3 cbBTC/yvUSD Lender Borrower]: 0x7D3536382805f01b3c8c88a9a2037466C1FEd424
+// Strategy [Aave v3 cbBTC/ysPYUSD Lender Borrower]: 0x3a36da4424906752c97532619757E232f4970a0f
+// Strategy [Aave v3 cbBTC/ysRLUSD Lender Borrower]: 0xCba881a129A8Fe951c5909bDeCe34184B06eCafB
+// Strategy [Aave v3 cbBTC/ysUSDT Lender Borrower]: 0x64D67F70Fa1a6898485D69b5916E1ce1e494B026
+// Exchange: 0xEbb2908D09eCf29924CfB0dFa28687491EcdEaF0
+// Oracle: 0x804916A943A01E2E82304C1C0E743eAeF63D2FFd

@@ -186,4 +186,46 @@ contract CurveRouteTest is Test, Deploy {
         assertEq(ERC20(CBBTC).balanceOf(address(_exchange)), 0);
     }
 
+    // ============================================================
+    // wstETH/USDC (2 hops: crvUSD/USDC, tricryptollama)
+    // ============================================================
+
+    function test_usdcToWsteth() public {
+        Exchange _exchange = new Exchange(address(this));
+        _setUsdcWstethRoute(address(_exchange));
+
+        uint256 _amount = 10_000e6;
+        deal(USDC, user, _amount);
+
+        vm.startPrank(user);
+        ERC20(USDC).approve(address(_exchange), _amount);
+        uint256 _out = _exchange.exchange(USDC, WSTETH, _amount, 0);
+        vm.stopPrank();
+
+        console2.log("USDC in:", _amount);
+        console2.log("wstETH out:", _out);
+        assertGt(_out, 0);
+        assertEq(ERC20(USDC).balanceOf(address(_exchange)), 0);
+        assertEq(ERC20(WSTETH).balanceOf(address(_exchange)), 0);
+    }
+
+    function test_wstethToUsdc() public {
+        Exchange _exchange = new Exchange(address(this));
+        _setUsdcWstethRoute(address(_exchange));
+
+        uint256 _amount = 1e18;
+        deal(WSTETH, user, _amount);
+
+        vm.startPrank(user);
+        ERC20(WSTETH).approve(address(_exchange), _amount);
+        uint256 _out = _exchange.exchange(WSTETH, USDC, _amount, 0);
+        vm.stopPrank();
+
+        console2.log("wstETH in:", _amount);
+        console2.log("USDC out:", _out);
+        assertGt(_out, 0);
+        assertEq(ERC20(USDC).balanceOf(address(_exchange)), 0);
+        assertEq(ERC20(WSTETH).balanceOf(address(_exchange)), 0);
+    }
+
 }
